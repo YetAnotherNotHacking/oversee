@@ -2,6 +2,7 @@
 # View many cameras @ once and switch between them
 # https://github.com/yetanothernothacking/oversee
 try:
+    from tminus.headinit import initall
     import cv2
     import threading
     import numpy as np
@@ -27,11 +28,8 @@ try:
     import traceback
 except ImportError as e:
     print("Did you run 'pip3 install -r requirements.txt? You are missing something.'")
-
     print(f"Missing package {e}")
-
 logging.basicConfig(level=logging.DEBUG)
-
 geolocation_data = {}
 
 # Global layout variables for panel display

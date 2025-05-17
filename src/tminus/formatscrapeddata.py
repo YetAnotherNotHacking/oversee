@@ -30,15 +30,7 @@ def process_file(input_file, output_file):
     except Exception as e:
         print(f"Error: {str(e)}", file=sys.stderr)
         return 0
-def main():
-    parser = argparse.ArgumentParser(description='Format stream URLs by removing protocols and query parameters')
-    parser.add_argument('--input', '-i', required=True, help='Input file containing URLs')
-    parser.add_argument('--output', '-o', required=True, help='Output file for formatted URLs')    
-    args = parser.parse_args()
-    count = process_file(args.input, args.output)
-    print(f"Successfully formatted {count} URLs")
-    print(f"Input file: {args.input}")
-    print(f"Output file: {args.output}")
-
-def format_file(input_file=""):
-    
+def format_file(input_file, output_file):
+    print(f"Starting to process {input_file}")
+    count = process_file(input_file, output_file)
+    print(f"Processed {count} links to the correct format and wrote the output to {output_file}")
