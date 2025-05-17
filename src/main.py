@@ -405,14 +405,8 @@ def count_lines(filepath):
         return sum(1 for _ in f)
 
 def download_ip2loc_db_if_not_exists():
-    if os.path.exists(DB_CSV):
-        return
-    if not os.path.exists(DB_ZIP):
-        r = requests.get(DB_URL)
-        with open(DB_ZIP, "wb") as f:
-            f.write(r.content)
-    with zipfile.ZipFile(DB_ZIP, 'r') as zip_ref:
-        zip_ref.extract(DB_CSV)
+    pass
+    # Moved to the headinit file in tminus
 
 def load_ip2loc_db():
     ranges = []

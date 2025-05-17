@@ -39,5 +39,6 @@ def main():
     print(f"Successfully formatted {count} URLs")
     print(f"Input file: {args.input}")
     print(f"Output file: {args.output}")
-if __name__ == "__main__":
-    main()
+
+def format_file(input_file=""):
+    
