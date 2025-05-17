@@ -14,15 +14,11 @@ headers = {
 
 with open(output_file, 'w') as f:
     pass
-
 def extract_stream_links(page_url):
     stream_links = []
     try:
-        
         time.sleep(random.uniform(1, 3))
-      
         response = requests.get(page_url, headers=headers)
-
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
             thumbnail_items = soup.select('a.thumbnail-item__wrap')
@@ -49,7 +45,6 @@ def crawl_all_pages():
         print(f"Found {len(links)} links on page {page_num}. Total links so far: {total_links}")
         progress = (page_num / total_pages) * 100
         print(f"Progress: {progress:.2f}%")
-
 def scrape_insecam_camera_urls(output_file="stream_links.txt", base_url = "http://www.insecam.org/en/byrating/", total_pages = 448):
     print(f"Starting to crawl {total_pages} pages from {base_url}")
     start_time = time.time()
