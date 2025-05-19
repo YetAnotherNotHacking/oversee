@@ -26,11 +26,11 @@ try:
 except ImportError as e:
     print("Did you run 'pip3 install -r requirements.txt? You are missing something.'")
     print(f"Missing package {e}")
-logging.basicConfig(level=logging.DEBUG); geolocation_data = {}; right_panel_left = 0; right_panel_right = 0; right_panel_top = 0; right_panel_bottom = 0; camera_view_height = 0; camera_view_top = 0; camera_view_bottom = 0; info_section_top = 0; info_section_bottom = 0; info_section_height = 0; right_activity_left = 0; right_activity_right = 0
+print("Doing init jobs..."); initall(); print("Init completed"); logging.basicConfig(level=logging.DEBUG); geolocation_data = {}; right_panel_left = 0; right_panel_right = 0; right_panel_top = 0; right_panel_bottom = 0; camera_view_height = 0; camera_view_top = 0; camera_view_bottom = 0; info_section_top = 0; info_section_bottom = 0; info_section_height = 0; right_activity_left = 0; right_activity_right = 0
 COLOR_PALETTE = {
-    'background_dark': (50, 30, 30),
-    'background_medium': (70, 50, 50),
-    'background_light': (90, 70, 70),
+    'background_dark': (30, 30, 30),
+    'background_medium': (70, 70, 70),
+    'background_light': (90, 90, 90),
     'accent_primary': (130, 90, 50),
     'accent_secondary': (50, 150, 180),
     'accent_tertiary': (120, 60, 40),

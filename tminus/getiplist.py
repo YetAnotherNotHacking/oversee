@@ -10,12 +10,9 @@ headers = {
     "Connection": "keep-alive",
     "Referer": "https://www.insecam.org/"
 }
-with open(output_file, 'w') as f:
-    pass
 def extract_stream_links(page_url):
     stream_links = []
     try:
-        time.sleep(random.uniform(1, 3))
         response = requests.get(page_url, headers=headers)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
@@ -30,7 +27,7 @@ def extract_stream_links(page_url):
     except Exception as e:
         print(f"Error processing {page_url}: {str(e)}")
     return stream_links
-def crawl_all_pages():
+def crawl_all_pages(total_pages, base_url, output_file):
     total_links = 0
     for page_num in range(1, total_pages + 1):
         page_url = f"{base_url}?page={page_num}"
@@ -40,8 +37,9 @@ def crawl_all_pages():
                 f.write(f"{link}\n")
         print(f"Found {len(links)} links on page {page_num}. Total links so far: {total_links}"); progress = (page_num / total_pages) * 100; print(f"Progress: {progress:.2f}%")
 def scrape_insecam_camera_urls(output_file="stream_links.txt", base_url = "http://www.insecam.org/en/byrating/", total_pages = 448):
-    print(f"Starting to crawl {total_pages} pages from {base_url}")
-    start_time = time.time(); crawl_all_pages(); end_time = time.time(); elapsed_time = end_time - start_time
+    with open(output_file, 'w') as f:
+        pass
+    print(f"Starting to crawl {total_pages} pages from {base_url}"); start_time = time.time(); crawl_all_pages(total_pages=total_pages, base_url=base_url, output_file=output_file); end_time = time.time(); elapsed_time = end_time - start_time
     if os.path.exists(output_file):
         file_size = os.path.getsize(output_file)
         with open(output_file, 'r') as f:
