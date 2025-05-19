@@ -39,15 +39,6 @@ intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 def check_endpoint(endpoint: str) -> bool:
-    """
-    Check if a camera endpoint is valid by attempting to connect to it
-    
-    Args:
-        endpoint: Camera URL endpoint to check
-        
-    Returns:
-        bool: True if camera is available, False otherwise
-    """
     try:
         # Set a short timeout to avoid hanging on non-responsive endpoints
         response = requests.get(endpoint, timeout=3)
