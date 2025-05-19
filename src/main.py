@@ -3,6 +3,8 @@
 # https://github.com/yetanothernothacking/oversee
 try:
     from tminus.headinit import initall
+    from tzero.cleanolddatabases import remove_ip2loc, remove_iplist
+    import argparse
     import cv2
     import threading
     import numpy as np
@@ -29,10 +31,6 @@ try:
 except ImportError as e:
     print("Did you run 'pip3 install -r requirements.txt? You are missing something.'")
     print(f"Missing package {e}")
-
-print("Doing init jobs...")
-initall()
-print("Init completed")
 
 logging.basicConfig(level=logging.DEBUG)
 geolocation_data = {}
@@ -414,14 +412,17 @@ def download_ip2loc_db_if_not_exists():
 def load_ip2loc_db():
     ranges = []
     countries = []
-    with open(DB_CSV, newline='') as f:
-        reader = csv.reader(f)
-        for row in reader:
-            ip_from = int(row[0])
-            ip_to = int(row[1])
-            country = row[3]
-            ranges.append(ip_to)
-            countries.append((ip_from, country))
+    try:
+        with open(DB_CSV, newline='') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                ip_from = int(row[0])
+                ip_to = int(row[1])
+                country = row[3]
+                ranges.append(ip_to)
+                countries.append((ip_from, country))
+    except:
+        pass
     return ranges, countries
 
 try:
@@ -1859,13 +1860,49 @@ def handle_camera_control(control_action, camera_ip):
     except Exception as e:
         logging.error(f"Error handling camera control: {e}")
         show_popup(text=f"Camera control error: {str(e)[:30]}", color="red")
+
+
+def cleanall():
+    print("Cleaning all dataset")
+    remove_ip2loc()
+    remove_iplist()
+    print("Datasets have been deleted, callinit the init function tDatabaseso cause them to autodownload again")
+    initall()
+
+def cleanip2loc():
+    print("Cleaning ip2loc dataset")
+    remove_ip2loc()
+    print("Datasets have been deleted, callinit the init function to cause them to autodownload again")
+    initall()
+
+def cleaniplist():
+    print("Cleaning iplist dataset")
+    remove_iplist()
+    print("Datasets have been deleted, callinit the init function to cause them to autodownload again")
+    initall()
+
 def main():
-    try:
-        download_ip2loc_db_if_not_exists()
-        ranges, countries = load_ip2loc_db()
-    except Exception as e:
-        logging.error(f"Error loading IP database: {e}")
-        ranges, countries = [], []
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--cleanall", help="Delete the old data sources and download new ones", action="store_true")
+    parser.add_argument("--cleanip2loc", help="Delete the old data sources for ip2loc and download new ones", action="store_true")
+    parser.add_argument("--cleanip2list", help="Delete the old iplist and scrape a new one", action="store_true")
+    args = parser.parse_args()
+
+    # Act based on the inputs now
+    if args.cleanall:
+        cleanall()
+        time.sleep(1)
+    elif args.cleanip2loc:
+        cleanip2loc()
+        time.sleep(1) 
+    elif args.cleanip2loc:
+        cleaniplist()
+        time.sleep(1) 
+
+    print("Doing init jobs...")
+    initall()
+    print("Init completed")
+
     with open("rawips.txt") as f:
         inputs = [line.strip() for line in f if line.strip()]
     logging.debug(f"Loaded {len(inputs)} streams from ip_list.txt.")
