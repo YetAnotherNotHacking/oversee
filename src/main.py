@@ -1864,20 +1864,32 @@ def handle_camera_control(control_action, camera_ip):
 
 def cleanall():
     print("Cleaning all dataset")
-    remove_ip2loc()
-    remove_iplist()
+    if os.path.isfile(DB_ZIP) and os.path.isfile(DB_CSV) and os.path.isfile(IP_LIST_FILE):
+        remove_ip2loc(DB_ZIP=DB_ZIP, DB_CSV=DB_CSV)
+        remove_iplist(IP_LIST_FILE=IP_LIST_FILE)
+    else:
+        print("Invalid state detected, exiting. HINT: This happens when you clean the program before it has fully inited atleast one time.")
+        exit()
     print("Datasets have been deleted, callinit the init function tDatabaseso cause them to autodownload again")
     initall()
 
 def cleanip2loc():
     print("Cleaning ip2loc dataset")
-    remove_ip2loc()
+    if os.path.isfile(DB_CSV) and os.path.isfile(DB_ZIP):
+        remove_ip2loc(DB_ZIP=DB_ZIP, DB_CSV=DB_CSV)
+    else:
+        print("Invalid state detected, exiting. HINT: This happens when you clean the program before it has fully inited atleast one time.")
+        exit()
     print("Datasets have been deleted, callinit the init function to cause them to autodownload again")
     initall()
 
 def cleaniplist():
     print("Cleaning iplist dataset")
-    remove_iplist()
+    if os.path.isfile(IP_LIST_FILE):
+        remove_iplist(IP_LIST_FILE=IP_LIST_FILE)
+    else:
+        print("Invalid state detected, exiting. HINT: This happens when you clean the program before it has fully inited atleast one time.")
+        exit()
     print("Datasets have been deleted, callinit the init function to cause them to autodownload again")
     initall()
 
