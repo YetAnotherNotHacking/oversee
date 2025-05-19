@@ -8,7 +8,10 @@ Reversing the camera movements. Better organization to come.
 
 # Known non moving cameras:
 */snap.jpg (BOSCH and similar)
-
+*/video.mjpg (Axis and similar)
+*/webcapture.jpg (blocked by a control planel login unknown brand)
+*/nph-jpeg.cgi (StarDot Technologies)
+*/asp/video.cgi
 
 Mobotic m12 - 87.128.61.124:8082/control/userimage.html
 ZOOM IN:
@@ -47,5 +50,6 @@ MIN PAN http://120.51.157.146:1024/-wvhttp-01-/control.cgi?s=822d-1472900a&c.1.p
 MAX PAN http://120.51.157.146:1024/-wvhttp-01-/control.cgi?s=822d-1472900a&c.1.pan=17000&seq=0.10706612394004256
 MIN ZOOM http://120.51.157.146:1024/-wvhttp-01-/control.cgi?s=822d-1472900a&c.1.zoom=6040&seq=0.5784726761357728
 MAX ZOOM http://120.51.157.146:1024/-wvhttp-01-/control.cgi?s=822d-1472900a&c.1.zoom=320&seq=0.4222188636815958
+
 
 
