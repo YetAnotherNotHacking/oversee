@@ -1774,6 +1774,8 @@ def display_camera_details(frames_dict, full_grid, selected_camera,
     
     return full_grid
 
+
+
 # Camera movement control class
 class CameraMovement:
     """Class for camera movement controls with placeholder methods"""

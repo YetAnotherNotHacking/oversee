@@ -3,6 +3,7 @@ echo Cleaning old formatted code
 rm tminus/*.py
 rm main.py
 echo Removed old code
+sleep 1
 echo Ensuring the directory structure is correct
 mkdir -p tminus
 echo Directory creation done
