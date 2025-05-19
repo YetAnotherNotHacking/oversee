@@ -1,5 +1,7 @@
 try:
     from tminus.headinit import initall
+    from tzero.cleanolddatabases import remove_ip2loc, remove_iplist
+    import argparse
     import cv2
     import threading
     import numpy as np
@@ -26,7 +28,7 @@ try:
 except ImportError as e:
     print("Did you run 'pip3 install -r requirements.txt? You are missing something.'")
     print(f"Missing package {e}")
-print("Doing init jobs..."); initall(); print("Init completed"); logging.basicConfig(level=logging.DEBUG); geolocation_data = {}; right_panel_left = 0; right_panel_right = 0; right_panel_top = 0; right_panel_bottom = 0; camera_view_height = 0; camera_view_top = 0; camera_view_bottom = 0; info_section_top = 0; info_section_bottom = 0; info_section_height = 0; right_activity_left = 0; right_activity_right = 0
+logging.basicConfig(level=logging.DEBUG); geolocation_data = {}; right_panel_left = 0; right_panel_right = 0; right_panel_top = 0; right_panel_bottom = 0; camera_view_height = 0; camera_view_top = 0; camera_view_bottom = 0; info_section_top = 0; info_section_bottom = 0; info_section_height = 0; right_activity_left = 0; right_activity_right = 0
 COLOR_PALETTE = {
     'background_dark': (30, 30, 30),
     'background_medium': (70, 70, 70),
@@ -158,11 +160,14 @@ def download_ip2loc_db_if_not_exists():
 def load_ip2loc_db():
     ranges = []
     countries = []
-    with open(DB_CSV, newline='') as f:
-        reader = csv.reader(f)
-        for row in reader:
-            ip_from = int(row[0])
-            ip_to = int(row[1]); country = row[3]; ranges.append(ip_to); countries.append((ip_from, country))
+    try:
+        with open(DB_CSV, newline='') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                ip_from = int(row[0])
+                ip_to = int(row[1]); country = row[3]; ranges.append(ip_to); countries.append((ip_from, country))
+    except:
+        pass
     return ranges, countries
 try:
     ip_database = load_ip2loc_db()
@@ -874,13 +879,44 @@ def handle_camera_control(control_action, camera_ip):
     except Exception as e:
         logging.error(f"Error handling camera control: {e}")
         show_popup(text=f"Camera control error: {str(e)[:30]}", color="red")
+def cleanall():
+    print("Cleaning all dataset")
+    if os.path.isfile(DB_ZIP) and os.path.isfile(DB_CSV) and os.path.isfile(IP_LIST_FILE):
+        remove_ip2loc(DB_ZIP=DB_ZIP, DB_CSV=DB_CSV)
+        remove_iplist(IP_LIST_FILE=IP_LIST_FILE)
+    else:
+        print("Invalid state detected, exiting. HINT: This happens when you clean the program before it has fully inited atleast one time.")
+        exit()
+    print("Datasets have been deleted, callinit the init function tDatabaseso cause them to autodownload again"); initall()
+def cleanip2loc():
+    print("Cleaning ip2loc dataset")
+    if os.path.isfile(DB_CSV) and os.path.isfile(DB_ZIP):
+        remove_ip2loc(DB_ZIP=DB_ZIP, DB_CSV=DB_CSV)
+    else:
+        print("Invalid state detected, exiting. HINT: This happens when you clean the program before it has fully inited atleast one time.")
+        exit()
+    print("Datasets have been deleted, callinit the init function to cause them to autodownload again"); initall()
+def cleaniplist():
+    print("Cleaning iplist dataset")
+    if os.path.isfile(IP_LIST_FILE):
+        remove_iplist(IP_LIST_FILE=IP_LIST_FILE)
+    else:
+        print("Invalid state detected, exiting. HINT: This happens when you clean the program before it has fully inited atleast one time.")
+        exit()
+    print("Datasets have been deleted, callinit the init function to cause them to autodownload again"); initall()
 def main():
-    try:
-        download_ip2loc_db_if_not_exists()
-        ranges, countries = load_ip2loc_db()
-    except Exception as e:
-        logging.error(f"Error loading IP database: {e}")
-        ranges, countries = [], []
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--cleanall", help="Delete the old data sources and download new ones", action="store_true"); parser.add_argument("--cleanip2loc", help="Delete the old data sources for ip2loc and download new ones", action="store_true"); parser.add_argument("--cleanip2list", help="Delete the old iplist and scrape a new one", action="store_true"); args = parser.parse_args()
+    if args.cleanall:
+        cleanall()
+        time.sleep(1)
+    elif args.cleanip2loc:
+        cleanip2loc()
+        time.sleep(1)
+    elif args.cleanip2loc:
+        cleaniplist()
+        time.sleep(1)
+    print("Doing init jobs..."); initall(); print("Init completed")
     with open("rawips.txt") as f:
         inputs = [line.strip() for line in f if line.strip()]
     logging.debug(f"Loaded {len(inputs)} streams from ip_list.txt."); frames = {}; borders = {}; labels = {}; lock = threading.Lock()
