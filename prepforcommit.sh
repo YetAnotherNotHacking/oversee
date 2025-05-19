@@ -1,4 +1,8 @@
 # Run all of the tasks to prep newly written code for a commit to the github
+echo Cleaning old formatted code
+rm tminus/*.py
+rm main.py
+echo Removed old code
 echo Ensuring the directory structure is correct
 mkdir -p tminus
 echo Directory creation done
