@@ -1,5 +1,6 @@
 import requests
 import zipfile
+import os
 
 def download_database(DB_URL, DB_ZIP, DB_CSV):
     if os.path.exists(DB_CSV):

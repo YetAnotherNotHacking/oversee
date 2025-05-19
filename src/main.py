@@ -29,6 +29,11 @@ try:
 except ImportError as e:
     print("Did you run 'pip3 install -r requirements.txt? You are missing something.'")
     print(f"Missing package {e}")
+
+print("Doing init jobs...")
+initall()
+print("Init completed")
+
 logging.basicConfig(level=logging.DEBUG)
 geolocation_data = {}
 
@@ -50,9 +55,9 @@ right_activity_right = 0
 # Using a more professional blue-based theme
 COLOR_PALETTE = {
     # Main colors
-    'background_dark': (50, 30, 30),       # Dark blue-gray background
-    'background_medium': (70, 50, 50),     # Medium blue-gray for panels
-    'background_light': (90, 70, 70),      # Lighter blue-gray for highlights
+    'background_dark': (30, 30, 30),       # Monotone gray background
+    'background_medium': (70, 70, 70),     # Medium blue-gray for panels
+    'background_light': (90, 90, 90),      # Lighter blue-gray for highlights
     
     # Accent colors
     'accent_primary': (130, 90, 50),       # Orange accent
