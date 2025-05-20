@@ -169,14 +169,20 @@ selected_page = 1
 # Matrix view button
 button_page_1_topleft_x = 960
 button_page_1_topleft_y = 0
-button_page_1_bottomright_x = button_page_1_topleft_x + 250
+button_page_1_bottomright_x = button_page_1_topleft_x + 230
 button_page_1_bottomright_y = 40
 
 # Grid view button
-button_page_2_topleft_x = 1220
+button_page_2_topleft_x = 1200
 button_page_2_topleft_y = 0
-button_page_2_bottomright_x = button_page_2_topleft_x + 250
+button_page_2_bottomright_x = button_page_2_topleft_x + 220
 button_page_2_bottomright_y = 40
+
+# Map view button (new)
+button_page_3_topleft_x = 1430
+button_page_3_topleft_y = 0
+button_page_3_bottomright_x = button_page_3_topleft_x + 220
+button_page_3_bottomright_y = 40
 
 # Scroll Up Button
 button_list_scrollup_topleft_x = windowactivity_leftactivity_bottomright_x - 60
@@ -216,6 +222,17 @@ bandwidth_history = deque(maxlen=60)  # Store 60 seconds of bandwidth data
 last_bandwidth_check = 0
 prev_bytes_sent = 0
 prev_bytes_recv = 0
+
+# Add mouse position tracking for tooltips
+mouse_position = (0, 0)
+hover_tooltip_active = False
+hover_tooltip_data = None
+hover_tooltip_last_update = 0
+
+# Add global variables for location clustering
+location_clusters = {}
+last_cluster_update_time = 0
+selected_location_cluster = None
 
 def update_bandwidth_usage():
     """Updates the bandwidth usage history"""
@@ -409,6 +426,17 @@ def download_ip2loc_db_if_not_exists():
     pass
     # Moved to the headinit file in tminus
 
+def ip_to_int(ip_address):
+    """Convert an IP address string to integer format for database lookups."""
+    try:
+        if not ip_address or ":" in ip_address:  # Skip empty or IPv6 addresses
+            return 0
+        # Convert IP string to integer
+        return int(ipaddress.IPv4Address(ip_address))
+    except Exception as e:
+        logging.debug(f"Error converting IP {ip_address} to int: {e}")
+        return 0
+
 def load_ip2loc_db():
     ranges = []
     countries = []
@@ -416,14 +444,14 @@ def load_ip2loc_db():
         with open(DB_CSV, newline='') as f:
             reader = csv.reader(f)
             for row in reader:
-                ip_from = int(row[0])
-                ip_to = int(row[1])
-                country = row[3]
-                ranges.append(ip_to)
-                countries.append((ip_from, country))
-    except:
-        pass
-    return ranges, countries
+                if len(row) >= 4:  # Ensure row has the expected format
+                    ip_from = int(row[0])
+                    ip_to = int(row[1])
+                    country = row[3]
+                    ranges.append((ip_from, ip_to, country))
+    except Exception as e:
+        logging.error(f"Error loading IP database: {e}")
+    return ranges
 
 try:
     ip_database = load_ip2loc_db()
@@ -432,17 +460,31 @@ except Exception as e:
     ip_database = load_ip2loc_db()
 
 def get_geolocation(ip_address):
+    """Get geolocation information for an IP address."""
+    if not ip_address or ip_address == "Unknown":
+        return "Unknown Location"
+        
+    # Check cache first
     if ip_address in geolocation_data:
         return geolocation_data[ip_address]
 
     try:
+        # Extract just the IP if it contains a port
+        if ":" in ip_address:
+            ip_address = ip_address.split(":")[0]
+            
+        # Convert to integer for lookup
         ip_int = ip_to_int(ip_address)
+        if ip_int == 0:
+            return "Unknown Location"
+            
+        # Search through the database
         for ip_from, ip_to, country in ip_database:
             if ip_from <= ip_int <= ip_to:
                 geolocation_data[ip_address] = country
                 return country
-    except Exception:
-        pass
+    except Exception as e:
+        logging.error(f"Geolocation lookup error for {ip_address}: {e}")
 
     geolocation_data[ip_address] = "Unknown Location"
     return "Unknown Location"
@@ -483,15 +525,18 @@ def check_if_in_button_area(point):
     def check_in_bounding_box(point, top_left, bottom_right):
         return top_left[0] <= point[0] <= bottom_right[0] and top_left[1] <= point[1] <= bottom_right[1]
 
-    # 1 - page 1 button
-    # 2 - page 2 button
+    # 1 - page 1 button (Matrix View)
+    # 2 - page 2 button (List View)
     # 3 - list view scroll up button
     # 4 - list view scroll down button
+    # 5 - page 3 button (Map View) - new
 
     if check_in_bounding_box(point, [button_page_1_topleft_x, button_page_1_topleft_y], [button_page_1_bottomright_x, button_page_1_bottomright_y]):
         return 1
     if check_in_bounding_box(point, [button_page_2_topleft_x, button_page_2_topleft_y], [button_page_2_bottomright_x, button_page_2_bottomright_y]):
         return 2
+    if check_in_bounding_box(point, [button_page_3_topleft_x, button_page_3_topleft_y], [button_page_3_bottomright_x, button_page_3_bottomright_y]):
+        return 5  # Using 5 for Map View to avoid confusion with the scroll buttons (3 and 4)
     if check_in_bounding_box(point, [button_list_scrollup_topleft_x, button_list_scrollup_topleft_y], [button_list_scrollup_bottomright_x, button_list_scrollup_bottomright_y]):
         return 3
     if check_in_bounding_box(point, [button_list_scrolldn_topleft_x, button_list_scrolldn_topleft_y], [button_list_scrolldn_bottomright_x, button_list_scrolldn_bottomright_y]):
@@ -558,7 +603,7 @@ def draw_popups_on_frame(frame):
         return result
 
 def click_handler():
-    global selected_page, current_list_position, selected_camera, working_cameras
+    global selected_page, current_list_position, selected_camera, working_cameras, selected_location_cluster
 
     try:
         current_mouse_location = get_current_cursor_position()
@@ -569,9 +614,11 @@ def click_handler():
             show_popup(text=f"Button {button_reaction} clicked")
 
         if button_reaction == 1:
-            selected_page = 1
+            selected_page = 1  # Matrix View
         elif button_reaction == 2:
-            selected_page = 2
+            selected_page = 2  # List View
+        elif button_reaction == 5:
+            selected_page = 3  # Map View
         elif button_reaction == 3:
             # Scroll up
             if current_list_position <= 0:
@@ -600,6 +647,55 @@ def click_handler():
                     if idx < len(working_cameras):
                         selected_camera = working_cameras[idx]
                         show_popup(text=f"Selected camera: {selected_camera}")
+            # Check if click was on a location cluster in Map View
+            elif selected_page == 3:
+                # Calculate cluster box parameters
+                screen_w = get_screen_x()
+                grid_left = 50
+                grid_top = 150
+                grid_width = screen_w - 100
+                box_height = 120
+                box_margin = 20
+                box_width = (grid_width - box_margin*3) // 3  # 3 boxes per row
+                
+                # Check which cluster was clicked
+                clicked_cluster = None
+                row = 0
+                col = 0
+                max_cols = 3
+                
+                for location in location_clusters.keys():
+                    # Calculate box position
+                    box_x = grid_left + col * (box_width + box_margin)
+                    box_y = grid_top + row * (box_height + box_margin)
+                    
+                    # Check if click was within this box
+                    if (box_x <= current_mouse_location[0] <= box_x + box_width and
+                        box_y <= current_mouse_location[1] <= box_y + box_height):
+                        clicked_cluster = location
+                        break
+                    
+                    # Move to next position in grid
+                    col += 1
+                    if col >= max_cols:
+                        col = 0
+                        row += 1
+                
+                # Handle cluster selection
+                if clicked_cluster:
+                    if clicked_cluster == selected_location_cluster:
+                        # Deselect if already selected
+                        selected_location_cluster = None
+                        show_popup(text=f"Deselected cluster: {clicked_cluster}")
+                    else:
+                        # Select the new cluster
+                        selected_location_cluster = clicked_cluster
+                        show_popup(text=f"Selected cluster: {clicked_cluster}")
+                        
+                        # Count cameras in this cluster
+                        camera_count = len(location_clusters[clicked_cluster]['cameras'])
+                        active_count = location_clusters[clicked_cluster]['active_count']
+                        show_popup(text=f"Showing {camera_count} cameras ({active_count} active)")
     except Exception as e:
         logging.error(f"Error in click_handler: {e}")
         show_popup(text=f"Click error: {str(e)[:30]}", color="red")
@@ -637,6 +733,18 @@ def start_on_click(target_func):
             triggered[0] = False
 
     listener = mouse.Listener(on_click=on_click)
+    listener.start()
+    return listener
+
+def track_mouse_position():
+    """Track the mouse position for use with tooltips."""
+    global mouse_position
+
+    def on_move(x, y):
+        global mouse_position
+        mouse_position = (x, y)
+
+    listener = mouse.Listener(on_move=on_move)
     listener.start()
     return listener
 
@@ -990,6 +1098,8 @@ def layout_frames(frames_dict, borders_dict, labels_dict, selected_page, inputs)
     global camera_view_height, camera_view_top, camera_view_bottom
     global info_section_top, info_section_bottom, info_section_height
     global right_activity_left, right_activity_right
+    global mouse_position, hover_tooltip_active, hover_tooltip_data
+    global selected_location_cluster
     
     # Update working cameras list - all camera IPs that have valid frames
     working_cameras = [cam_id for cam_id, frame in frames_dict.items() 
@@ -1042,6 +1152,12 @@ def layout_frames(frames_dict, borders_dict, labels_dict, selected_page, inputs)
 
         grid_rows = []
 
+        # Track which camera the mouse is hovering over for tooltip display
+        hover_tooltip_active = False
+        current_mouse_pos = mouse_position
+        hovered_camera = None
+        hovered_cell_coords = None
+
         for r in range(rows):
             row_imgs = []
             for c in range(cols):
@@ -1063,6 +1179,18 @@ def layout_frames(frames_dict, borders_dict, labels_dict, selected_page, inputs)
                 try:
                     # Create a copy to avoid modifying the original frame
                     frame_copy = frame.copy()
+                    
+                    # Calculate cell position in global coordinates for mouse hover detection
+                    cell_x1 = c * cell_w + 40  # Add border offset
+                    cell_y1 = r * cell_h + 40  # Add border offset
+                    cell_x2 = cell_x1 + cell_w
+                    cell_y2 = cell_y1 + cell_h
+                    
+                    # Check if mouse is hovering over this cell
+                    mouse_x, mouse_y = current_mouse_pos
+                    if cell_x1 <= mouse_x <= cell_x2 and cell_y1 <= mouse_y <= cell_y2:
+                        hovered_camera = url
+                        hovered_cell_coords = (cell_x1, cell_y1, cell_w, cell_h)
                     
                     # Check for valid dimensions before resizing
                     if cell_w <= 6 or cell_h <= 6:
@@ -1087,6 +1215,45 @@ def layout_frames(frames_dict, borders_dict, labels_dict, selected_page, inputs)
 
         full_grid = np.vstack(grid_rows)
         full_grid = cv2.copyMakeBorder(full_grid, 40, 40, 40, 40, cv2.BORDER_CONSTANT, value=COLOR_PALETTE['background_medium'])
+        
+        # If a camera is being hovered over, prepare tooltip data
+        if hovered_camera:
+            ip_address = extract_ip_from_url(hovered_camera)
+            location = get_geolocation(ip_address)
+            
+            hover_tooltip_active = True
+            hover_tooltip_data = {
+                'camera': hovered_camera,
+                'ip': ip_address,
+                'location': location,
+                'position': current_mouse_pos
+            }
+            
+            # Get additional metadata about the camera if available
+            meta = camera_metadata.get(hovered_camera, {})
+            resolution = meta.get("resolution", "Unknown")
+            fps = meta.get("fps", 0)
+            stream_type = meta.get("stream_type", "Unknown")
+            
+            # Create an enhanced tooltip with more information
+            tooltip_lines = [
+                f"IP: {ip_address}",
+                f"Location: {location}",
+            ]
+            
+            # Add resolution and stream type if available
+            if resolution != "Unknown":
+                tooltip_lines.append(f"Resolution: {resolution}")
+            if stream_type != "Unknown":
+                tooltip_lines.append(f"Type: {stream_type}")
+            if fps > 0:
+                tooltip_lines.append(f"FPS: {fps}")
+                
+            # Join the lines with newlines for multi-line tooltip
+            tooltip_text = "\n".join(tooltip_lines)
+            
+            # Draw the tooltip
+            full_grid = draw_tooltip(full_grid, tooltip_text, current_mouse_pos)
 
     elif selected_page == 2:
         # Build the initial frame (again??)
@@ -1422,12 +1589,227 @@ def layout_frames(frames_dict, borders_dict, labels_dict, selected_page, inputs)
         cv2.putText(full_grid, time_text, (time_x, time_y), 
                     time_font, time_font_scale, COLOR_PALETTE['text_bright'], 1)
     
+    elif selected_page == 3:  # Map View
+        # Update location clusters
+        update_location_clusters(frames_dict)
+        
+        # Create basic frame
+        screen_w, screen_h = get_screen_x(), get_screen_y()
+        full_grid = np.zeros((screen_h, screen_w, 3), dtype=np.uint8)
+        full_grid[:] = COLOR_PALETTE['background_dark']
+        
+        # Draw title
+        cv2.putText(full_grid, "Camera Clusters by Location", 
+                   (50, 80), cv2.FONT_HERSHEY_SIMPLEX, 1.0, 
+                   COLOR_PALETTE['text_bright'], 2)
+                   
+        # Draw cluster count
+        cluster_count = len(location_clusters)
+        cv2.putText(full_grid, f"Found {cluster_count} location clusters", 
+                   (50, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7, 
+                   COLOR_PALETTE['text_medium'], 1)
+        
+        # Layout grid for location clusters
+        grid_left = 50
+        grid_top = 150
+        grid_width = screen_w - 100
+        grid_right = grid_left + grid_width
+        
+        # Calculate grid parameters
+        box_height = 120
+        box_margin = 20
+        box_width = (grid_width - box_margin*3) // 3  # 3 boxes per row
+        
+        # Draw the boxes of clusters
+        row = 0
+        col = 0
+        max_cols = 3
+        current_mouse_pos = mouse_position
+        hovered_cluster = None
+        
+        for location, cluster in location_clusters.items():
+            # Calculate box position
+            box_x = grid_left + col * (box_width + box_margin)
+            box_y = grid_top + row * (box_height + box_margin)
+            
+            # Check if mouse is hovering over this box
+            if (box_x <= current_mouse_pos[0] <= box_x + box_width and 
+                box_y <= current_mouse_pos[1] <= box_y + box_height):
+                hovered_cluster = location
+                
+            # Determine box color based on active percentage
+            active_percent = 0
+            if cluster['count'] > 0:
+                active_percent = cluster['active_count'] / cluster['count'] * 100
+                
+            if active_percent > 75:
+                box_color = COLOR_PALETTE['status_good']  # Green for mostly active
+            elif active_percent > 25:
+                box_color = COLOR_PALETTE['status_warning']  # Yellow for partially active
+            else:
+                box_color = COLOR_PALETTE['status_error']  # Red for mostly inactive
+                
+            # Draw box with proper styling
+            # Highlight if selected or hovered
+            is_selected = (location == selected_location_cluster)
+            is_hovered = (location == hovered_cluster)
+            
+            # Draw box background
+            alpha = 0.8
+            if is_selected:
+                alpha = 1.0
+                # Draw a thicker border for selected cluster
+                cv2.rectangle(full_grid, (box_x-2, box_y-2), 
+                             (box_x+box_width+2, box_y+box_height+2), 
+                             COLOR_PALETTE['accent_primary'], 2)
+            
+            overlay = full_grid.copy()
+            cv2.rectangle(overlay, (box_x, box_y), 
+                         (box_x+box_width, box_y+box_height), 
+                         COLOR_PALETTE['background_medium'], -1)
+            
+            # Add a color indicator on the left side of the box
+            indicator_width = 10
+            cv2.rectangle(overlay, (box_x, box_y), 
+                         (box_x+indicator_width, box_y+box_height), 
+                         box_color, -1)
+            
+            # Apply transparency
+            cv2.addWeighted(overlay, alpha, full_grid, 1-alpha, 0, full_grid)
+            
+            # Draw the text content
+            title_y = box_y + 25
+            count_y = title_y + 25
+            active_y = count_y + 25
+            fps_y = active_y + 25
+            
+            # Location name (truncate if too long)
+            location_name = location
+            if len(location_name) > 15:
+                location_name = location_name[:12] + "..."
+                
+            cv2.putText(full_grid, location_name, 
+                       (box_x + 20, title_y), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.65, 
+                       COLOR_PALETTE['text_bright'], 1)
+            
+            # Camera count
+            count_text = f"Cameras: {cluster['count']}"
+            cv2.putText(full_grid, count_text, 
+                       (box_x + 20, count_y), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.55, 
+                       COLOR_PALETTE['text_medium'], 1)
+            
+            # Active count
+            active_text = f"Active: {cluster['active_count']} ({int(active_percent)}%)"
+            cv2.putText(full_grid, active_text, 
+                       (box_x + 20, active_y), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.55, 
+                       COLOR_PALETTE['text_medium'], 1)
+            
+            # Average FPS
+            avg_fps = cluster['metadata'].get('avg_fps', 0)
+            fps_text = f"Avg FPS: {avg_fps:.1f}"
+            cv2.putText(full_grid, fps_text, 
+                       (box_x + 20, fps_y), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.55, 
+                       COLOR_PALETTE['text_medium'], 1)
+            
+            # Move to next position in grid
+            col += 1
+            if col >= max_cols:
+                col = 0
+                row += 1
+        
+        # Handle cluster selection and hovering
+        if hovered_cluster:
+            cluster = location_clusters[hovered_cluster]
+            
+            # Draw a detailed tooltip for the hovered cluster
+            tooltip_lines = [
+                f"Location: {hovered_cluster}",
+                f"Total Cameras: {cluster['count']}",
+                f"Active Cameras: {cluster['active_count']} ({int(active_percent)}%)",
+                f"Average FPS: {cluster['metadata'].get('avg_fps', 0):.1f}"
+            ]
+            
+            # Add text about clicking to select
+            if hovered_cluster != selected_location_cluster:
+                tooltip_lines.append("Click to view cameras from this location")
+            else:
+                tooltip_lines.append("Currently selected")
+                
+            tooltip_text = "\n".join(tooltip_lines)
+            full_grid = draw_tooltip(full_grid, tooltip_text, current_mouse_pos)
+            
+        # If a cluster is selected, show preview of cameras from that location
+        if selected_location_cluster and selected_location_cluster in location_clusters:
+            selected_cluster = location_clusters[selected_location_cluster]
+            preview_area_top = grid_top + (row + 1) * (box_height + box_margin) + 20
+            
+            # Draw section title
+            cv2.putText(full_grid, f"Camera Previews: {selected_location_cluster}", 
+                       (grid_left, preview_area_top - 5), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, 
+                       COLOR_PALETTE['text_bright'], 1)
+            
+            # Draw horizontal line
+            cv2.line(full_grid, 
+                    (grid_left, preview_area_top + 10), 
+                    (grid_right, preview_area_top + 10), 
+                    COLOR_PALETTE['divider'], 1)
+            
+            # Display first 8 cameras of the selected location
+            preview_top = preview_area_top + 30
+            preview_size = 160
+            preview_padding = 20
+            preview_per_row = 4
+            
+            for i, camera_id in enumerate(selected_cluster['cameras'][:8]):
+                if i >= 8:  # Limit to 8 previews
+                    break
+                    
+                row = i // preview_per_row
+                col = i % preview_per_row
+                
+                x = grid_left + col * (preview_size + preview_padding)
+                y = preview_top + row * (preview_size + preview_padding + 30)
+                
+                # Draw camera preview
+                frame = frames_dict.get(camera_id)
+                if frame is not None and frame.size > 0:
+                    try:
+                        preview_frame = cv2.resize(frame, (preview_size, preview_size))
+                        full_grid[y:y+preview_size, x:x+preview_size] = preview_frame
+                    except Exception as e:
+                        # Draw placeholder on error
+                        cv2.rectangle(full_grid, (x, y), 
+                                     (x+preview_size, y+preview_size), 
+                                     COLOR_PALETTE['background_light'], -1)
+                else:
+                    # Draw placeholder for offline camera
+                    cv2.rectangle(full_grid, (x, y), 
+                                 (x+preview_size, y+preview_size), 
+                                 COLOR_PALETTE['background_light'], -1)
+                
+                # Draw camera address below preview
+                ip_text = extract_ip_from_url(camera_id)
+                if len(ip_text) > 15:
+                    ip_text = ip_text[:12] + "..."
+                    
+                cv2.putText(full_grid, ip_text, 
+                           (x, y+preview_size+20), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, 
+                           COLOR_PALETTE['text_medium'], 1)
+        
     # Add the graphical part of the buttons - with bounds checking
     screen_width = full_grid.shape[1]
-    button1_x1 = min(button_page_1_topleft_x, screen_width - 300)
-    button1_x2 = min(button_page_1_bottomright_x, screen_width - 50)
-    button2_x1 = min(button_page_2_topleft_x, screen_width - 300)
-    button2_x2 = min(button_page_2_bottomright_x, screen_width - 50)
+    button1_x1 = min(button_page_1_topleft_x, screen_width - 450)
+    button1_x2 = min(button_page_1_bottomright_x, screen_width - 450 + 230)
+    button2_x1 = min(button_page_2_topleft_x, screen_width - 450 + 240)
+    button2_x2 = min(button_page_2_bottomright_x, screen_width - 450 + 460)
+    button3_x1 = min(button_page_3_topleft_x, screen_width - 450 + 470)
+    button3_x2 = min(button_page_3_bottomright_x, screen_width - 450 + 690)
     
     # Matrix View button - active/inactive state
     button1_color = COLOR_PALETTE['accent_secondary'] if selected_page == 1 else COLOR_PALETTE['button_normal']
@@ -1438,12 +1820,19 @@ def layout_frames(frames_dict, borders_dict, labels_dict, selected_page, inputs)
     button2_color = COLOR_PALETTE['accent_secondary'] if selected_page == 2 else COLOR_PALETTE['button_normal']
     cv2.rectangle(full_grid, (button2_x1, button_page_2_topleft_y), 
                  (button2_x2, button_page_2_bottomright_y), button2_color, -1)
+                 
+    # Map View button - active/inactive state
+    button3_color = COLOR_PALETTE['accent_secondary'] if selected_page == 3 else COLOR_PALETTE['button_normal']
+    cv2.rectangle(full_grid, (button3_x1, button_page_3_topleft_y), 
+                 (button3_x2, button_page_3_bottomright_y), button3_color, -1)
 
     # Add button borders
     cv2.rectangle(full_grid, (button1_x1, button_page_1_topleft_y), 
                  (button1_x2, button_page_1_bottomright_y), COLOR_PALETTE['border'], 1)
     cv2.rectangle(full_grid, (button2_x1, button_page_2_topleft_y), 
                  (button2_x2, button_page_2_bottomright_y), COLOR_PALETTE['border'], 1)
+    cv2.rectangle(full_grid, (button3_x1, button_page_3_topleft_y), 
+                 (button3_x2, button_page_3_bottomright_y), COLOR_PALETTE['border'], 1)
 
     text_font = cv2.FONT_HERSHEY_SIMPLEX
     text_scale = 0.7
@@ -1452,18 +1841,24 @@ def layout_frames(frames_dict, borders_dict, labels_dict, selected_page, inputs)
 
     text1 = "Matrix View"
     text2 = "List View"
+    text3 = "Map View"
 
     text1_size = cv2.getTextSize(text1, text_font, text_scale, text_thickness)[0]
     text2_size = cv2.getTextSize(text2, text_font, text_scale, text_thickness)[0]
+    text3_size = cv2.getTextSize(text3, text_font, text_scale, text_thickness)[0]
 
-    text1_x = button1_x1 + (min(250, button1_x2 - button1_x1) - text1_size[0]) // 2
+    text1_x = button1_x1 + (min(230, button1_x2 - button1_x1) - text1_size[0]) // 2
     text1_y = button_page_1_topleft_y + (40 + text1_size[1]) // 2
 
-    text2_x = button2_x1 + (min(250, button2_x2 - button2_x1) - text2_size[0]) // 2
+    text2_x = button2_x1 + (min(220, button2_x2 - button2_x1) - text2_size[0]) // 2
     text2_y = button_page_2_topleft_y + (40 + text2_size[1]) // 2
+    
+    text3_x = button3_x1 + (min(220, button3_x2 - button3_x1) - text3_size[0]) // 2
+    text3_y = button_page_3_topleft_y + (40 + text3_size[1]) // 2
 
     cv2.putText(full_grid, text1, (text1_x, text1_y), text_font, text_scale, text_color, text_thickness)
     cv2.putText(full_grid, text2, (text2_x, text2_y), text_font, text_scale, text_color, text_thickness)
+    cv2.putText(full_grid, text3, (text3_x, text3_y), text_font, text_scale, text_color, text_thickness)
 
     height, width = full_grid.shape[:2]
 
@@ -1895,6 +2290,120 @@ def cleaniplist():
     print("Datasets have been deleted, callinit the init function to cause them to autodownload again")
     initall()
 
+def draw_tooltip(frame, text, position, padding=10, font_scale=0.7, bg_color=(40, 40, 40), text_color=(240, 240, 240)):
+    """Draw a tooltip box with text at the specified position."""
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    
+    # Handle multi-line text
+    lines = text.split('\n')
+    line_heights = []
+    line_widths = []
+    
+    # Calculate size needed for each line
+    for line in lines:
+        text_size, baseline = cv2.getTextSize(line, font, font_scale, 1)
+        line_heights.append(text_size[1])
+        line_widths.append(text_size[0])
+    
+    # Position the tooltip just below the mouse cursor
+    x, y = position
+    
+    # Keep tooltip on screen
+    height, width = frame.shape[:2]
+    box_width = max(line_widths) + padding * 2
+    line_spacing = 8  # Space between lines
+    box_height = sum(line_heights) + padding * 2 + line_spacing * max(0, len(lines) - 1)
+    
+    # Adjust position to stay within screen bounds
+    if x + box_width > width:
+        x = width - box_width
+    if y + box_height + 20 > height:
+        y = y - box_height - 10  # Show above cursor if near bottom
+    else:
+        y = y + 20  # Show below cursor normally
+    
+    # Draw semi-transparent background
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (x, y), (x + box_width, y + box_height), bg_color, -1)
+    cv2.rectangle(overlay, (x, y), (x + box_width, y + box_height), (80, 80, 80), 1)
+    cv2.addWeighted(overlay, 0.8, frame, 0.2, 0, frame)
+    
+    # Draw each line of text
+    text_y = y + padding
+    for i, line in enumerate(lines):
+        text_y += line_heights[i]  # Add the height of this line
+        text_x = x + padding
+        cv2.putText(frame, line, (text_x, text_y), font, font_scale, text_color, 1, cv2.LINE_AA)
+        text_y += line_spacing  # Add space between lines
+    
+    return frame
+
+def update_location_clusters(frames_dict):
+    """Analyze active cameras and group them by location/country"""
+    global location_clusters, last_cluster_update_time
+    
+    # Only update every 5 seconds to avoid excessive processing
+    current_time = time.time()
+    if current_time - last_cluster_update_time < 5 and location_clusters:
+        return
+    
+    last_cluster_update_time = current_time
+    new_clusters = {}
+    
+    # Process all active cameras
+    for camera_id, frame in frames_dict.items():
+        if frame is None or frame.size == 0:
+            continue
+            
+        ip_address = extract_ip_from_url(camera_id)
+        location = get_geolocation(ip_address)
+        
+        if location == "Unknown Location":
+            location = "Unidentified"
+            
+        # Add camera to the appropriate cluster
+        if location not in new_clusters:
+            new_clusters[location] = {
+                'cameras': [],
+                'count': 0,
+                'active_count': 0,
+                'metadata': {},
+            }
+            
+        # Add camera to cluster
+        new_clusters[location]['cameras'].append(camera_id)
+        new_clusters[location]['count'] += 1
+        
+        # Check if camera is "active" (has recent frames)
+        meta = camera_metadata.get(camera_id, {})
+        last_frame_time = meta.get('last_frame_time', 0)
+        if current_time - last_frame_time < 30:  # Active in last 30 seconds
+            new_clusters[location]['active_count'] += 1
+            
+        # Add some metadata about the cluster
+        if 'fps_total' not in new_clusters[location]['metadata']:
+            new_clusters[location]['metadata']['fps_total'] = 0
+            new_clusters[location]['metadata']['cameras_with_fps'] = 0
+            
+        fps = meta.get('fps', 0)
+        if fps > 0:
+            new_clusters[location]['metadata']['fps_total'] += fps
+            new_clusters[location]['metadata']['cameras_with_fps'] += 1
+    
+    # Calculate averages and other stats
+    for location, cluster in new_clusters.items():
+        if cluster['metadata'].get('cameras_with_fps', 0) > 0:
+            cluster['metadata']['avg_fps'] = cluster['metadata']['fps_total'] / cluster['metadata']['cameras_with_fps']
+        else:
+            cluster['metadata']['avg_fps'] = 0
+    
+    # Sort clusters by camera count (descending)
+    location_clusters = {k: v for k, v in sorted(
+        new_clusters.items(), 
+        key=lambda item: item[1]['count'], 
+        reverse=True
+    )}
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--cleanall", help="Delete the old data sources and download new ones", action="store_true")
@@ -2092,4 +2601,5 @@ def main():
 
 if __name__ == "__main__":
     start_on_click(click_handler)
+    track_mouse_position()
     main()
