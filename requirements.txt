@@ -1,3 +1,4 @@
+beautifulsoup4
 opencv-python
 numpy
 requests
