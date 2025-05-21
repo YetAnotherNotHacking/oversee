@@ -11,3 +11,4 @@ A github automation has been set up to automatically build on commits. Check the
 
 # Progress:
 gotta love losing 6 hours of work from an AI edit that ruined all of the stuff you were working on as well as screwing over your git.
+![bruh](image.png)
