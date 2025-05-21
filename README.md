@@ -8,3 +8,6 @@ The script currently has a matrix view that shows all of the connected cameras a
 
 # Installation
 A github automation has been set up to automatically build on commits. Check the releases tab.
+
+# Progress:
+gotta love losing 6 hours of work from an AI edit that ruined all of the stuff you were working on as well as screwing over your git.
