@@ -1,38 +1,40 @@
-name: Build Executables
+name: Build Binaries
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
+    branches:
+      - main
+  workflow_dispatch:  # allows manual triggering
 
 jobs:
   build:
-    name: Build on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pyinstaller
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
 
-    - name: Build executable
-      run: |
-        pyinstaller --onefile main.py
+      - name: Build with PyInstaller
+        run: |
+          DATE_TAG=$(date +'%Y-%m-%d-%H%M')
+          pyinstaller --onefile --windowed src/main.py --name SilverFlag-${{ matrix.os }}-$DATE_TAG
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: executable-${{ matrix.os }}
-        path: dist/*
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: SilverFlag-${{ matrix.os }}
+          path: dist/
