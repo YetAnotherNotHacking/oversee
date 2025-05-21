@@ -1,6 +1,15 @@
 # SilverFlag Camera Viewer
 # View many cameras @ once and switch between them
 # https://github.com/yetanothernothacking/oversee
+
+# Error in GUI for gui packing
+try:
+    import tkinter
+except:
+    print("You must have tkinter installed on your system for basic functionality")
+    print("Maybe you need to pip3 install -r requirements.txt if your binary did not include the dependancy tree")
+    print("Most errors are conveyed to the user in tkinter, this is one of the few that will be shown in text format.")
+
 try:
     from tminus.headinit import initall
     from tzero.cleanolddatabases import remove_ip2loc, remove_iplist
