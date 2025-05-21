@@ -34,7 +34,7 @@ jobs:
           pyinstaller --onefile --windowed src/main.py --name SilverFlag-${{ matrix.os }}-$DATE_TAG
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: SilverFlag-${{ matrix.os }}
           path: dist/
