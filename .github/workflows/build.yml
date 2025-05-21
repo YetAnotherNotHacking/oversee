@@ -30,8 +30,17 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
-          DATE_TAG=$(date +'%Y-%m-%d-%H%M')
-          pyinstaller --onefile --windowed src/main.py --name SilverFlag-${{ matrix.os }}-$DATE_TAG
+          pyinstaller --onefile --windowed src/main.py --name SilverFlag-${{ matrix.os }}
+          
+      - name: Set build timestamp (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: echo "DATE_TAG=$(date +'%Y-%m-%d-%H%M')" >> $GITHUB_ENV
+      
+      - name: Set build timestamp (Windows)
+        if: runner.os == 'Windows'
+        run: | 
+          $dt = Get-Date -Format "yyyy-MM-dd-HHmm"
+          echo "DATE_TAG=$dt" >> $env:GITHUB_ENV
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
