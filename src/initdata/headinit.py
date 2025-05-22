@@ -1,8 +1,8 @@
 import os
 
-from tminus.getiplist import scrape_insecam_camera_urls
-from tminus.ip2locdownload import download_database
-from tminus.formatscrapeddata import format_file
+from initdata.getiplist import scrape_insecam_camera_urls
+from initdata.ip2locdownload import download_database
+from initdata.formatscrapeddata import format_file
 
 raw_scraped_data_file = "stream_links.txt" # From scraper
 processed_urls_file = "rawips.txt" # For program to read
