@@ -5,7 +5,7 @@ from initdata.ip2locdownload import download_database
 from initdata.formatscrapeddata import format_file
 
 raw_scraped_data_file = "stream_links.txt" # From scraper
-processed_urls_file = "rawips.txt" # For program to read
+processed_urls_file = "streamables.txt" # For program to read
 base_url = "http://www.insecam.org/en/byrating/"
 total_pages = 448
 database_url = "https://download.ip2location.com/lite/IP2LOCATION-LITE-DB1.CSV.ZIP"
