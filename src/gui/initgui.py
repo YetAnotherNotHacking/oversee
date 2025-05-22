@@ -7,95 +7,253 @@ class StartUpMenu:
     def __init__(self):
         self.loadup_status = "Initializing..."
         self.loadup_percentage = 0.0
+        self.scraping_status = "Waiting..."
+        self.scraping_percentage = 0.0
         self.window = None
         self.running = False
-        self.thread = None
+        self.completion_callback = None
         
     def create_loading_window(self):
         self.window = tk.Tk()
-        self.window.overrideredirect(True)
-        window_width = 400
-        window_height = 150
+        self.window.title("Loading...")
+        
+        # Configure window properties
+        window_width = 450
+        window_height = 220  # Increased height for dual progress bars
         screen_width = self.window.winfo_screenwidth()
         screen_height = self.window.winfo_screenheight()
         x = (screen_width - window_width) // 2
         y = (screen_height - window_height) // 2
+        
+        # Set geometry first
         self.window.geometry(f"{window_width}x{window_height}+{x}+{y}")
+        
+        # Force window to front and make it visible
+        self.window.lift()
         self.window.attributes('-topmost', True)
+        self.window.focus_force()
+        
+        # Make window non-resizable
         self.window.resizable(False, False)
         self.window.configure(bg='#2c3e50')
+        
+        # Remove window decorations AFTER positioning and making visible
+        self.window.after(100, lambda: self.window.overrideredirect(True))
+        
         main_frame = tk.Frame(self.window, bg='#2c3e50', padx=20, pady=20)
         main_frame.pack(fill='both', expand=True)
+        
         title_label = tk.Label(
             main_frame, 
-            text="Loading...", 
+            text="Loading Application...", 
             font=('Arial', 16, 'bold'),
             fg='white',
             bg='#2c3e50'
         )
         title_label.pack(pady=(0, 15))
+        
+        # Main progress section
+        main_progress_frame = tk.Frame(main_frame, bg='#2c3e50')
+        main_progress_frame.pack(fill='x', pady=(0, 15))
+        
+        tk.Label(
+            main_progress_frame,
+            text="Overall Progress:",
+            font=('Arial', 9, 'bold'),
+            fg='#ecf0f1',
+            bg='#2c3e50'
+        ).pack(anchor='w')
+        
         self.status_label = tk.Label(
-            main_frame,
+            main_progress_frame,
             text=self.loadup_status,
             font=('Arial', 10),
             fg='#ecf0f1',
             bg='#2c3e50',
-            wraplength=350
+            wraplength=400
         )
-        self.status_label.pack(pady=(0, 10))
+        self.status_label.pack(pady=(2, 5), anchor='w')
+        
         self.progress_bar = ttk.Progressbar(
-            main_frame,
-            length=350,
+            main_progress_frame,
+            length=400,
             mode='determinate',
             maximum=100
         )
-        self.progress_bar.pack(pady=(0, 10))
+        self.progress_bar.pack(pady=(0, 5))
+        
         self.percentage_label = tk.Label(
-            main_frame,
+            main_progress_frame,
             text="0%",
             font=('Arial', 10),
             fg='#ecf0f1',
             bg='#2c3e50'
         )
-        self.percentage_label.pack()
+        self.percentage_label.pack(anchor='w')
         
-    def update_display(self):
+        # Scraping progress section
+        scraping_progress_frame = tk.Frame(main_frame, bg='#2c3e50')
+        scraping_progress_frame.pack(fill='x')
+        
+        tk.Label(
+            scraping_progress_frame,
+            text="Web Scraping Progress:",
+            font=('Arial', 9, 'bold'),
+            fg='#ecf0f1',
+            bg='#2c3e50'
+        ).pack(anchor='w')
+        
+        self.scraping_status_label = tk.Label(
+            scraping_progress_frame,
+            text=self.scraping_status,
+            font=('Arial', 10),
+            fg='#bdc3c7',
+            bg='#2c3e50',
+            wraplength=400
+        )
+        self.scraping_status_label.pack(pady=(2, 5), anchor='w')
+        
+        self.scraping_progress_bar = ttk.Progressbar(
+            scraping_progress_frame,
+            length=400,
+            mode='determinate',
+            maximum=100
+        )
+        self.scraping_progress_bar.pack(pady=(0, 5))
+        
+        self.scraping_percentage_label = tk.Label(
+            scraping_progress_frame,
+            text="0%",
+            font=('Arial', 10),
+            fg='#bdc3c7',
+            bg='#2c3e50'
+        )
+        self.scraping_percentage_label.pack(anchor='w')
+        
+        # Force window update and visibility
+        self.window.update_idletasks()
+        self.window.deiconify()
+        
+        # Additional visibility forcing for macOS
+        self.window.after(200, self._ensure_visible)
+        
+    def _ensure_visible(self):
+        """Ensure window is visible - especially important on macOS"""
+        if self.window and self.running:
+            try:
+                self.window.lift()
+                self.window.focus_force()
+                self.window.attributes('-topmost', True)
+                # Re-center after overrideredirect
+                self.window.update_idletasks()
+                window_width = 450
+                window_height = 220
+                screen_width = self.window.winfo_screenwidth()
+                screen_height = self.window.winfo_screenheight()
+                x = (screen_width - window_width) // 2
+                y = (screen_height - window_height) // 2
+                self.window.geometry(f"{window_width}x{window_height}+{x}+{y}")
+            except tk.TclError:
+                pass
+        
+    def update_status(self, status, percentage):
+        """Update main status - this method can be called from any thread"""
+        self.loadup_status = status
+        self.loadup_percentage = percentage
+        
+        # Schedule GUI update on main thread
+        if self.window and self.running:
+            self.window.after(0, self._update_main_gui)
+    
+    def update_scraping_status(self, status, percentage):
+        """Update scraping status - this method can be called from any thread"""
+        self.scraping_status = status
+        self.scraping_percentage = percentage
+        
+        # Schedule GUI update on main thread
+        if self.window and self.running:
+            self.window.after(0, self._update_scraping_gui)
+    
+    def _update_main_gui(self):
+        """Update main GUI elements - runs on main thread"""
         if self.window and self.running:
             try:
                 self.status_label.config(text=self.loadup_status)
                 progress_value = max(0, min(100, self.loadup_percentage))
                 self.progress_bar['value'] = progress_value
                 self.percentage_label.config(text=f"{progress_value:.1f}%")
-                self.window.after(50, self.update_display)
-                
+                self.window.update_idletasks()
             except tk.TclError:
                 pass
     
-    def window_loop(self):
+    def _update_scraping_gui(self):
+        """Update scraping GUI elements - runs on main thread"""
+        if self.window and self.running:
+            try:
+                self.scraping_status_label.config(text=self.scraping_status)
+                progress_value = max(0, min(100, self.scraping_percentage))
+                self.scraping_progress_bar['value'] = progress_value
+                self.scraping_percentage_label.config(text=f"{progress_value:.1f}%")
+                self.window.update_idletasks()
+            except tk.TclError:
+                pass
+    
+    def start_with_tasks(self, task_function, completion_callback=None):
+        """Start the GUI and run tasks in background"""
+        self.completion_callback = completion_callback
         self.create_loading_window()
         self.running = True
-        self.window.after(50, self.update_display)
         
+        print("Loading window created, starting background tasks...")
+        
+        # Start the background tasks
+        task_thread = threading.Thread(target=self._run_tasks, args=(task_function,), daemon=True)
+        task_thread.start()
+        
+        print("Background tasks started, entering main loop...")
+        
+        # Start the GUI main loop (this will block until window is closed)
         try:
             self.window.mainloop()
-        except:
-            pass
+        except Exception as e:
+            print(f"GUI main loop error: {e}")
         finally:
             self.running = False
+            print("GUI main loop ended")
     
-    def show_loading_window(self):
-        if not self.running:
-            self.thread = threading.Thread(target=self.window_loop, daemon=True)
-            self.thread.start()
+    def _run_tasks(self, task_function):
+        """Run the task function in background thread"""
+        try:
+            print("Running initialization tasks...")
+            task_function(self)
+            print("Initialization tasks completed")
+        except Exception as e:
+            print(f"Error during initialization: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            # Schedule completion on main thread
+            if self.window and self.running:
+                self.window.after(100, self._complete_loading)
+    
+    def _complete_loading(self):
+        """Complete the loading process"""
+        print("Completing loading process...")
+        if self.completion_callback:
+            try:
+                self.completion_callback()
+            except Exception as e:
+                print(f"Completion callback error: {e}")
+        self.overandout()
     
     def overandout(self):
+        """Close the loading window"""
+        print("Closing loading window...")
         self.running = False
         if self.window:
             try:
                 self.window.quit()
                 self.window.destroy()
-            except:
-                pass
+            except Exception as e:
+                print(f"Error closing window: {e}")
             self.window = None
-        if self.thread and self.thread.is_alive():
-            self.thread.join(timeout=1.0)

@@ -8,9 +8,9 @@ def extract_and_format(text):
     matches = pattern.findall(text)
     formatted_urls = []
     for m in matches:
-        ip = m[0]  # IP address
-        port = f":{m[1]}" if m[1] else ""  # Port with colon if exists
-        path = m[2] if m[2] else ""  # Path if exists
+        ip = m[0]
+        port = f":{m[1]}" if m[1] else ""
+        path = m[2] if m[2] else ""
         formatted_urls.append(f'{ip}{port}{path}')
     return formatted_urls
 def process_file(input_file, output_file):
