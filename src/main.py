@@ -26,6 +26,7 @@ try:
 except:
     print("You appear to be in a minimal python environment, please come back in a full environment to ensure this script will function correctly.")
 from gui.initgui import StartUpMenu
+from gui.maingui import runmaingui
 def initialization_tasks(startupmenu):
     startupmenu.update_status("Loading program settings", 5.0)
     import settings
@@ -35,7 +36,6 @@ def initialization_tasks(startupmenu):
     from initdata.ip2locdownload import download_database, extract_database
     from initdata.getiplist import scrape_insecam_camera_urls
     from initdata.formatscrapeddata import format_file
-    from gui.maingui import runmaingui
     startupmenu.update_status("Finished loading local libs", 20.0)
     download_complete = threading.Event()
     scraping_complete = threading.Event()
@@ -107,4 +107,4 @@ if __name__ == "__main__":
     startupmenu = StartUpMenu()
     startupmenu.start_with_tasks(initialization_tasks, on_completion)
     # MAIN
-    maingui.runmaingui()
+    runmaingui()
