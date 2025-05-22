@@ -40,18 +40,36 @@ def crawl_page_worker(page_info):
     return page_num, links
 
 def scrape_insecam_camera_urls(output_file="stream_links.txt", base_url="http://www.insecam.org/en/byrating/", 
-                              total_pages=448, max_workers=5, progress_callback=None):
+                              total_pages=448, max_workers=5, progress_callback=None, force_redownload=False):
+    # Check if file already exists and has content
+    if os.path.exists(output_file) and not force_redownload:
+        file_size = os.path.getsize(output_file)
+        if file_size > 0:
+            with open(output_file, 'r') as f:
+                line_count = sum(1 for _ in f)
+            print(f"Output file '{output_file}' already exists with {line_count} links ({file_size} bytes)")
+            print("Skipping download. Use force_redownload=True to re-download.")
+            return line_count
+        else:
+            print(f"Output file '{output_file}' exists but is empty. Proceeding with download...")
+    elif force_redownload and os.path.exists(output_file):
+        print(f"Force redownload enabled. Overwriting existing file '{output_file}'...")
+    
+    # Create/clear the output file
     with open(output_file, 'w') as f:
         pass
+    
     print(f"Starting to crawl {total_pages} pages from {base_url} using {max_workers} threads")
     start_time = time.time()
     page_infos = [(page_num, base_url) for page_num in range(1, total_pages + 1)]
     total_links = 0
     completed_pages = 0
     file_lock = threading.Lock()
+    
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_page = {executor.submit(crawl_page_worker, page_info): page_info[0] 
                          for page_info in page_infos}
+        
         for future in as_completed(future_to_page):
             page_num = future_to_page[future]
             try:
@@ -71,8 +89,10 @@ def scrape_insecam_camera_urls(output_file="stream_links.txt", base_url="http://
                 completed_pages += 1
                 if progress_callback:
                     progress_callback(completed_pages, total_pages, total_links)
+    
     end_time = time.time()
     elapsed_time = end_time - start_time
+    
     if os.path.exists(output_file):
         file_size = os.path.getsize(output_file)
         with open(output_file, 'r') as f:
@@ -84,4 +104,5 @@ def scrape_insecam_camera_urls(output_file="stream_links.txt", base_url="http://
         print(f"Average speed: {line_count/elapsed_time:.2f} links/second")
     else:
         print("Crawling completed but no output file was created.")
+    
     return total_links

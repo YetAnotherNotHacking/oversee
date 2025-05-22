@@ -106,6 +106,5 @@ if __name__ == "__main__":
     # INIT
     startupmenu = StartUpMenu()
     startupmenu.start_with_tasks(initialization_tasks, on_completion)
-
     # MAIN
     maingui.runmaingui()
