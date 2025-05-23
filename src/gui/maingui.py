@@ -14,7 +14,7 @@ ip_list_file = settings.ip_list_file
 class MainGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title(f"SilverFlag | OVERSEE {settings.overseeversion}")
+        self.root.title(f"SilverFlag | OVERSEE v{settings.overseeversion}")
         self.root.geometry("1200x800")
         self.root.minsize(800, 600)
         
