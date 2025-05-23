@@ -82,6 +82,95 @@ class MainGUI:
         settings_menu.add_command(label="Network Config", command=self.open_network_config)
         settings_menu.add_separator()
         settings_menu.add_command(label="About", command=self.show_about)
+    
+    def open_preferences(self):
+    """Open preferences dialog"""
+    # Simple placeholder implementation
+    from tkinter import messagebox
+    messagebox.showinfo("Preferences", "Preferences dialog not yet implemented")
+
+    def open_preferences(self):
+        """Open preferences dialog window"""
+        import tkinter as tk
+        from tkinter import ttk, filedialog, messagebox
+        
+        # Create preferences window
+        prefs_window = tk.Toplevel(self.root)
+        prefs_window.title("Preferences")
+        prefs_window.geometry("400x300")
+        prefs_window.resizable(False, False)
+        
+        # Make it modal
+        prefs_window.transient(self.root)
+        prefs_window.grab_set()
+        
+        # Center the window
+        prefs_window.update_idletasks()
+        x = (prefs_window.winfo_screenwidth() // 2) - (400 // 2)
+        y = (prefs_window.winfo_screenheight() // 2) - (300 // 2)
+        prefs_window.geometry(f"400x300+{x}+{y}")
+        
+        # Create notebook for tabs
+        notebook = ttk.Notebook(prefs_window)
+        notebook.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        # General tab
+        general_frame = ttk.Frame(notebook)
+        notebook.add(general_frame, text="General")
+        
+        # IP List File setting
+        ttk.Label(general_frame, text="IP List File:").grid(row=0, column=0, sticky='w', padx=10, pady=5)
+        
+        ip_file_frame = ttk.Frame(general_frame)
+        ip_file_frame.grid(row=1, column=0, sticky='ew', padx=10, pady=5)
+        ip_file_frame.grid_columnconfigure(0, weight=1)
+        
+        self.ip_file_var = tk.StringVar(value=getattr(settings, 'ip_list_file', ''))
+        ip_file_entry = ttk.Entry(ip_file_frame, textvariable=self.ip_file_var, width=40)
+        ip_file_entry.grid(row=0, column=0, sticky='ew', padx=(0, 5))
+        
+        def browse_ip_file():
+            filename = filedialog.askopenfilename(
+                title="Select IP List File",
+                filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+            )
+            if filename:
+                self.ip_file_var.set(filename)
+        
+        ttk.Button(ip_file_frame, text="Browse", command=browse_ip_file).grid(row=0, column=1)
+        
+        # Camera Settings tab
+        camera_frame = ttk.Frame(notebook)
+        notebook.add(camera_frame, text="Camera")
+        
+        ttk.Label(camera_frame, text="Default Camera URL Format:").grid(row=0, column=0, sticky='w', padx=10, pady=5)
+        self.camera_url_var = tk.StringVar(value="http://{ip}/video")
+        ttk.Entry(camera_frame, textvariable=self.camera_url_var, width=40).grid(row=1, column=0, sticky='ew', padx=10, pady=5)
+        
+        ttk.Label(camera_frame, text="Preview Frame Rate (FPS):").grid(row=2, column=0, sticky='w', padx=10, pady=5)
+        self.fps_var = tk.StringVar(value="10")
+        ttk.Entry(camera_frame, textvariable=self.fps_var, width=10).grid(row=3, column=0, sticky='w', padx=10, pady=5)
+        
+        # Buttons frame
+        button_frame = ttk.Frame(prefs_window)
+        button_frame.pack(fill='x', padx=10, pady=10)
+        
+        def save_preferences():
+            try:
+                # Save settings (you'll need to implement settings saving)
+                settings.ip_list_file = self.ip_file_var.get()
+                # Add other settings as needed
+                
+                messagebox.showinfo("Success", "Preferences saved successfully")
+                prefs_window.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to save preferences: {str(e)}")
+        
+        def cancel_preferences():
+            prefs_window.destroy()
+    
+    ttk.Button(button_frame, text="Save", command=save_preferences).pack(side='right', padx=(5, 0))
+    ttk.Button(button_frame, text="Cancel", command=cancel_preferences).pack(side='right')
         
     def create_map_view(self):
         map_frame = ttk.Frame(self.notebook)
