@@ -5,6 +5,8 @@ import time
 from datetime import datetime
 from PIL import Image, ImageTk
 from gui.rendermatrix import create_matrix_view as render_matrix
+from utility.ip2loc import get_geolocation
+from utility.iplist import get_ip_range
 import os
 import gui
 import settings
@@ -222,81 +224,269 @@ class MainGUI:
         # Destroy the root window
         self.root.destroy()
 
-    def create_list_view(self):
-        list_frame = ttk.Frame(self.notebook)
-        self.notebook.add(list_frame, text="List View")
+def create_list_view(self):
+    list_frame = ttk.Frame(self.notebook)
+    self.notebook.add(list_frame, text="List View")
+    
+    list_frame.grid_rowconfigure(0, weight=1)
+    list_frame.grid_columnconfigure(0, weight=1)
+    list_frame.grid_columnconfigure(1, weight=2)
+    
+    # Left panel - scrollable list
+    left_panel = ttk.Frame(list_frame)
+    left_panel.grid(row=0, column=0, sticky="nsew", padx=(10, 5), pady=10)
+    left_panel.grid_rowconfigure(0, weight=1)
+    left_panel.grid_columnconfigure(0, weight=1)
+    
+    # Create treeview for list items
+    self.tree = ttk.Treeview(left_panel, columns=('Name', 'Status'), show='tree headings')
+    self.tree.heading('#0', text='ID')
+    self.tree.heading('Name', text='IP Address')
+    self.tree.heading('Status', text='Status')
+    
+    self.tree.column('#0', width=50)
+    self.tree.column('Name', width=150)
+    self.tree.column('Status', width=80)
+    
+    # Initialize camera data storage
+    self.camera_data = {}
+    self.current_preview_thread = None
+    self.preview_active = False
+    
+    # Load IP addresses and populate treeview
+    self.load_ip_addresses()
+    
+    # Scrollbar for treeview
+    tree_scroll = ttk.Scrollbar(left_panel, orient="vertical", command=self.tree.yview)
+    self.tree.configure(yscrollcommand=tree_scroll.set)
+    
+    self.tree.grid(row=0, column=0, sticky="nsew")
+    tree_scroll.grid(row=0, column=1, sticky="ns")
+    
+    # Bind selection event
+    self.tree.bind('<<TreeviewSelect>>', self.on_item_select)
+    
+    # Right panel - details view
+    right_panel = ttk.Frame(list_frame)
+    right_panel.grid(row=0, column=1, sticky="nsew", padx=(5, 10), pady=10)
+    right_panel.grid_rowconfigure(1, weight=1)
+    right_panel.grid_columnconfigure(0, weight=1)
+    
+    # Image display area
+    self.image_frame = ttk.LabelFrame(right_panel, text="Camera Preview", padding=10)
+    self.image_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+    
+    # Placeholder for image
+    self.image_label = ttk.Label(self.image_frame, text="Select a camera to view preview", 
+                               background='lightgray', width=40, height=15, anchor='center')
+    self.image_label.grid(row=0, column=0, pady=20)
+    
+    # Properties frame
+    self.properties_frame = ttk.LabelFrame(right_panel, text="Properties", padding=10)
+    self.properties_frame.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
+    
+    # Properties labels
+    self.prop_name = ttk.Label(self.properties_frame, text="IP Address: Select a camera", font=('Arial', 10, 'bold'))
+    self.prop_name.grid(row=0, column=0, sticky="w", pady=2)
+    
+    self.prop_location = ttk.Label(self.properties_frame, text="Location: -")
+    self.prop_location.grid(row=1, column=0, sticky="w", pady=2)
+    
+    self.prop_status = ttk.Label(self.properties_frame, text="Status: -")
+    self.prop_status.grid(row=2, column=0, sticky="w", pady=2)
+    
+    self.prop_resolution = ttk.Label(self.properties_frame, text="Resolution: -")
+    self.prop_resolution.grid(row=3, column=0, sticky="w", pady=2)
+    
+    # Control buttons
+    button_frame = ttk.Frame(right_panel)
+    button_frame.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+    
+    self.refresh_btn = ttk.Button(button_frame, text="Refresh List", command=self.refresh_ip_list)
+    self.refresh_btn.pack(side='left', padx=(0, 5))
+    
+    self.test_connection_btn = ttk.Button(button_frame, text="Test Connection", command=self.test_selected_camera)
+    self.test_connection_btn.pack(side='left')
+
+    def load_ip_addresses(self):
+        """Load IP addresses from file and populate the treeview"""
+        try:
+            # Clear existing items
+            for item in self.tree.get_children():
+                self.tree.delete(item)
+            
+            # Get IP addresses from file (loading first 100 for performance)
+            ip_list = get_ip_range(settings.ip_list_file, 1, 100)
+            
+            # Populate treeview with IP addresses
+            for i, ip in enumerate(ip_list, 1):
+                item_id = self.tree.insert('', 'end', text=str(i), 
+                                        values=(ip, "Unknown"))
+                
+                # Initialize camera data
+                self.camera_data[item_id] = {
+                    'ip': ip,
+                    'status': 'Unknown',
+                    'location': None,
+                    'resolution': None,
+                    'last_check': None
+                }
+                
+                # Start background thread to check camera status
+                threading.Thread(target=self.check_camera_status, 
+                            args=(item_id, ip), daemon=True).start()
+                
+        except Exception as e:
+            print(f"Error loading IP addresses: {e}")
+
+    def check_camera_status(self, item_id, ip):
+        """Check if camera is accessible and update status"""
+        try:
+            # Try to connect to camera
+            cap = cv2.VideoCapture(f"http://{ip}/video")  # Adjust URL format as needed
+            
+            if cap.isOpened():
+                ret, frame = cap.read()
+                if ret:
+                    # Camera is working
+                    height, width = frame.shape[:2]
+                    resolution = f"{width}x{height}"
+                    
+                    self.camera_data[item_id].update({
+                        'status': 'Online',
+                        'resolution': resolution,
+                        'last_check': time.time()
+                    })
+                    
+                    # Update treeview in main thread
+                    self.tree.after(0, lambda: self.update_tree_item(item_id, ip, "Online"))
+                else:
+                    self.camera_data[item_id]['status'] = 'No Signal'
+                    self.tree.after(0, lambda: self.update_tree_item(item_id, ip, "No Signal"))
+            else:
+                self.camera_data[item_id]['status'] = 'Offline'
+                self.tree.after(0, lambda: self.update_tree_item(item_id, ip, "Offline"))
+                
+            cap.release()
+            
+        except Exception as e:
+            self.camera_data[item_id]['status'] = 'Error'
+            self.tree.after(0, lambda: self.update_tree_item(item_id, ip, "Error"))
         
-        list_frame.grid_rowconfigure(0, weight=1)
-        list_frame.grid_columnconfigure(0, weight=1)
-        list_frame.grid_columnconfigure(1, weight=2)
+        # Get location information
+        try:
+            location = get_geolocation(ip)
+            self.camera_data[item_id]['location'] = location
+        except Exception as e:
+            self.camera_data[item_id]['location'] = "Location unavailable"
+
+    def update_tree_item(self, item_id, ip, status):
+        """Update treeview item with new status"""
+        try:
+            self.tree.item(item_id, values=(ip, status))
+        except tk.TclError:
+            pass  # Item may have been deleted
+
+    def on_item_select(self, event):
+        """Handle item selection and start camera preview"""
+        selection = self.tree.selection()
+        if not selection:
+            return
         
-        # Left panel - scrollable list
-        left_panel = ttk.Frame(list_frame)
-        left_panel.grid(row=0, column=0, sticky="nsew", padx=(10, 5), pady=10)
-        left_panel.grid_rowconfigure(0, weight=1)
-        left_panel.grid_columnconfigure(0, weight=1)
+        item_id = selection[0]
+        if item_id not in self.camera_data:
+            return
         
-        # Create treeview for list items
-        self.tree = ttk.Treeview(left_panel, columns=('Name', 'Status'), show='tree headings')
-        self.tree.heading('#0', text='ID')
-        self.tree.heading('Name', text='Name')
-        self.tree.heading('Status', text='Status')
+        camera_info = self.camera_data[item_id]
+        ip = camera_info['ip']
         
-        self.tree.column('#0', width=50)
-        self.tree.column('Name', width=150)
-        self.tree.column('Status', width=80)
+        # Update properties display
+        self.prop_name.config(text=f"IP Address: {ip}")
+        self.prop_location.config(text=f"Location: {camera_info.get('location', 'Checking...')}")
+        self.prop_status.config(text=f"Status: {camera_info['status']}")
+        self.prop_resolution.config(text=f"Resolution: {camera_info.get('resolution', '-')}")
         
-        # Add items to treeview
-        for item in self.list_items:
-            self.tree.insert('', 'end', text=str(item['id']), 
-                           values=(item['name'], item['status']))
+        # Start camera preview if online
+        if camera_info['status'] == 'Online':
+            self.start_camera_preview(ip)
+        else:
+            self.image_label.config(image='', text=f"Camera {camera_info['status']}")
+
+    def start_camera_preview(self, ip):
+        """Start camera preview in a separate thread"""
+        # Stop current preview
+        self.preview_active = False
+        if self.current_preview_thread and self.current_preview_thread.is_alive():
+            self.current_preview_thread.join(timeout=1)
         
-        # Scrollbar for treeview
-        tree_scroll = ttk.Scrollbar(left_panel, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=tree_scroll.set)
+        # Start new preview
+        self.preview_active = True
+        self.current_preview_thread = threading.Thread(
+            target=self.camera_preview_worker, args=(ip,), daemon=True
+        )
+        self.current_preview_thread.start()
+
+    def camera_preview_worker(self, ip):
+        """Worker thread for camera preview"""
+        try:
+            cap = cv2.VideoCapture(f"http://{ip}/video")  # Adjust URL format as needed
+            
+            while self.preview_active and cap.isOpened():
+                ret, frame = cap.read()
+                if ret:
+                    # Resize frame for display
+                    frame = cv2.resize(frame, (320, 240))
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    
+                    # Convert to PhotoImage
+                    img = Image.fromarray(frame_rgb)
+                    photo = ImageTk.PhotoImage(img)
+                    
+                    # Update label in main thread
+                    self.image_label.after(0, lambda p=photo: self.update_preview_image(p))
+                    
+                    time.sleep(0.1)  # Limit frame rate
+                else:
+                    break
+                    
+            cap.release()
+            
+        except Exception as e:
+            self.image_label.after(0, lambda: self.image_label.config(
+                image='', text="Preview unavailable"
+            ))
+
+    def update_preview_image(self, photo):
+        """Update preview image in main thread"""
+        try:
+            self.image_label.config(image=photo, text='')
+            self.image_label.image = photo  # Keep a reference to prevent garbage collection
+        except tk.TclError:
+            pass
+
+    def refresh_ip_list(self):
+        """Refresh the IP address list"""
+        self.preview_active = False  # Stop current preview
+        self.load_ip_addresses()
+
+    def test_selected_camera(self):
+        """Test connection to selected camera"""
+        selection = self.tree.selection()
+        if not selection:
+            return
         
-        self.tree.grid(row=0, column=0, sticky="nsew")
-        tree_scroll.grid(row=0, column=1, sticky="ns")
+        item_id = selection[0]
+        if item_id not in self.camera_data:
+            return
         
-        # Bind selection event
-        self.tree.bind('<<TreeviewSelect>>', self.on_item_select)
+        ip = self.camera_data[item_id]['ip']
         
-        # Right panel - details view
-        right_panel = ttk.Frame(list_frame)
-        right_panel.grid(row=0, column=1, sticky="nsew", padx=(5, 10), pady=10)
-        right_panel.grid_rowconfigure(1, weight=1)
-        right_panel.grid_columnconfigure(0, weight=1)
+        # Update status to "Testing..."
+        self.tree.item(item_id, values=(ip, "Testing..."))
         
-        # Image display area
-        self.image_frame = ttk.LabelFrame(right_panel, text="Camera View", padding=10)
-        self.image_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        
-        # Placeholder for image
-        self.image_label = ttk.Label(self.image_frame, text="No image selected", 
-                                   background='lightgray', width=40, anchor='center')
-        self.image_label.grid(row=0, column=0, pady=20)
-        
-        # Properties frame
-        self.properties_frame = ttk.LabelFrame(right_panel, text="Properties", padding=10)
-        self.properties_frame.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
-        
-        # Properties labels
-        self.prop_name = ttk.Label(self.properties_frame, text="Name: Select an item", font=('Arial', 10, 'bold'))
-        self.prop_name.grid(row=0, column=0, sticky="w", pady=2)
-        
-        self.prop_location = ttk.Label(self.properties_frame, text="Location: -")
-        self.prop_location.grid(row=1, column=0, sticky="w", pady=2)
-        
-        self.prop_ip = ttk.Label(self.properties_frame, text="IP Address: -")
-        self.prop_ip.grid(row=2, column=0, sticky="w", pady=2)
-        
-        self.prop_status = ttk.Label(self.properties_frame, text="Status: -")
-        self.prop_status.grid(row=3, column=0, sticky="w", pady=2)
-        
-        # Buttons frame
-        buttons_frame = ttk.Frame(right_panel)
-        buttons_frame.grid(row=2, column=0, sticky="ew")
-        buttons_frame.grid_columnconfigure((0, 1, 2), weight=1)
+        # Start test in background thread
+        threading.Thread(target=self.check_camera_status, 
+                    args=(item_id, ip), daemon=True).start()
         
         # Three filler buttons
         ttk.Button(buttons_frame, text="Button 1", command=self.placeholder_action).grid(row=0, column=0, padx=2, pady=5, sticky="ew")
