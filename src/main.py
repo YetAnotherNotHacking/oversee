@@ -23,8 +23,12 @@ except:
 try:
     import threading
     import time
+    import logging
 except:
     print("You appear to be in a minimal python environment, please come back in a full environment to ensure this script will function correctly.")
+
+logging.basicConfig(level=logging.DEBUG)
+
 from gui.initgui import StartUpMenu
 from gui.maingui import runmaingui
 def initialization_tasks(startupmenu):
