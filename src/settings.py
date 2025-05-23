@@ -12,4 +12,4 @@ total_pages = 448 # Total number of pages on insecam, may require manual updatin
 
 # IP list settings
 ip_list_file = "streamables.txt"
-overseeversion = 0.2.13
+overseeversion = "0.2.13"
