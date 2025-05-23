@@ -1,7 +1,3 @@
-import logging
-
-
-# Read from the files
 def get_ip_range(filename, start, end):
     """Get a range of IP addresses from the file, with bounds checking."""
     try:
