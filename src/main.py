@@ -40,6 +40,7 @@ def initialization_tasks(startupmenu):
     from initdata.ip2locdownload import download_database, extract_database
     from initdata.getiplist import scrape_insecam_camera_urls
     from initdata.formatscrapeddata import format_file
+    from initdata.validateiplist import validate_file_address_reachable
     startupmenu.update_status("Finished loading local libs", 20.0)
     download_complete = threading.Event()
     scraping_complete = threading.Event()
@@ -67,7 +68,7 @@ def initialization_tasks(startupmenu):
                 output_file=settings.insecam_output_file, 
                 base_url=settings.base_url, 
                 total_pages=settings.total_pages,
-                max_workers=16, # Dangerous?
+                max_workers=8,
                 progress_callback=scraping_progress_callback
             )
             
@@ -86,12 +87,13 @@ def initialization_tasks(startupmenu):
     while not (download_complete.is_set() and scraping_complete.is_set()):
         time.sleep(0.1)
         if download_complete.is_set() and not scraping_complete.is_set():
-            startupmenu.update_status("Database ready, still scraping links...", 60.0)
+            startupmenu.update_status("Database ready, still scraping links...", 70.0)
         elif scraping_complete.is_set() and not download_complete.is_set():
             startupmenu.update_status("Links ready, still processing database...", 60.0)
-    startupmenu.update_status("Both tasks complete! Formatting URLs...", 80.0)
+    startupmenu.update_status("Both tasks complete! Formatting URLs and verifying connectivity...", 80.0)
     try:
         format_file(input_file=settings.insecam_output_file, output_file=settings.ip_list_file)
+        validate_file_address_reachable(max_workers=128)
         startupmenu.update_status("Formatting completed", 90.0)
     except Exception as e:
         print(f"Formatting error: {e}")
