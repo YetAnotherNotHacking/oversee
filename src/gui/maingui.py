@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import psutil
 import time
+import threading
 from datetime import datetime
 from PIL import Image, ImageTk
 from gui.rendermatrix import create_matrix_view as render_matrix
@@ -84,16 +85,15 @@ class MainGUI:
         settings_menu.add_command(label="About", command=self.show_about)
     
     def open_preferences(self):
-    """Open preferences dialog"""
-    # Simple placeholder implementation
-    from tkinter import messagebox
-    messagebox.showinfo("Preferences", "Preferences dialog not yet implemented")
+        messagebox.showinfo("Settings", "Preferences dialog would open here")
+    
+    def open_network_config(self):
+        messagebox.showinfo("Settings", "Network configuration dialog would open here")
+    
+    def show_about(self):
+        messagebox.showinfo("About", "Main Application v1.0\nA comprehensive GUI application")
 
     def open_preferences(self):
-        """Open preferences dialog window"""
-        import tkinter as tk
-        from tkinter import ttk, filedialog, messagebox
-        
         # Create preferences window
         prefs_window = tk.Toplevel(self.root)
         prefs_window.title("Preferences")
@@ -169,8 +169,8 @@ class MainGUI:
         def cancel_preferences():
             prefs_window.destroy()
     
-    ttk.Button(button_frame, text="Save", command=save_preferences).pack(side='right', padx=(5, 0))
-    ttk.Button(button_frame, text="Cancel", command=cancel_preferences).pack(side='right')
+        ttk.Button(button_frame, text="Save", command=save_preferences).pack(side='right', padx=(5, 0))
+        ttk.Button(button_frame, text="Cancel", command=cancel_preferences).pack(side='right')
         
     def create_map_view(self):
         map_frame = ttk.Frame(self.notebook)
@@ -313,89 +313,89 @@ class MainGUI:
         # Destroy the root window
         self.root.destroy()
 
-def create_list_view(self):
-    list_frame = ttk.Frame(self.notebook)
-    self.notebook.add(list_frame, text="List View")
-    
-    list_frame.grid_rowconfigure(0, weight=1)
-    list_frame.grid_columnconfigure(0, weight=1)
-    list_frame.grid_columnconfigure(1, weight=2)
-    
-    # Left panel - scrollable list
-    left_panel = ttk.Frame(list_frame)
-    left_panel.grid(row=0, column=0, sticky="nsew", padx=(10, 5), pady=10)
-    left_panel.grid_rowconfigure(0, weight=1)
-    left_panel.grid_columnconfigure(0, weight=1)
-    
-    # Create treeview for list items
-    self.tree = ttk.Treeview(left_panel, columns=('Name', 'Status'), show='tree headings')
-    self.tree.heading('#0', text='ID')
-    self.tree.heading('Name', text='IP Address')
-    self.tree.heading('Status', text='Status')
-    
-    self.tree.column('#0', width=50)
-    self.tree.column('Name', width=150)
-    self.tree.column('Status', width=80)
-    
-    # Initialize camera data storage
-    self.camera_data = {}
-    self.current_preview_thread = None
-    self.preview_active = False
-    
-    # Load IP addresses and populate treeview
-    self.load_ip_addresses()
-    
-    # Scrollbar for treeview
-    tree_scroll = ttk.Scrollbar(left_panel, orient="vertical", command=self.tree.yview)
-    self.tree.configure(yscrollcommand=tree_scroll.set)
-    
-    self.tree.grid(row=0, column=0, sticky="nsew")
-    tree_scroll.grid(row=0, column=1, sticky="ns")
-    
-    # Bind selection event
-    self.tree.bind('<<TreeviewSelect>>', self.on_item_select)
-    
-    # Right panel - details view
-    right_panel = ttk.Frame(list_frame)
-    right_panel.grid(row=0, column=1, sticky="nsew", padx=(5, 10), pady=10)
-    right_panel.grid_rowconfigure(1, weight=1)
-    right_panel.grid_columnconfigure(0, weight=1)
-    
-    # Image display area
-    self.image_frame = ttk.LabelFrame(right_panel, text="Camera Preview", padding=10)
-    self.image_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-    
-    # Placeholder for image
-    self.image_label = ttk.Label(self.image_frame, text="Select a camera to view preview", 
-                               background='lightgray', width=40, height=15, anchor='center')
-    self.image_label.grid(row=0, column=0, pady=20)
-    
-    # Properties frame
-    self.properties_frame = ttk.LabelFrame(right_panel, text="Properties", padding=10)
-    self.properties_frame.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
-    
-    # Properties labels
-    self.prop_name = ttk.Label(self.properties_frame, text="IP Address: Select a camera", font=('Arial', 10, 'bold'))
-    self.prop_name.grid(row=0, column=0, sticky="w", pady=2)
-    
-    self.prop_location = ttk.Label(self.properties_frame, text="Location: -")
-    self.prop_location.grid(row=1, column=0, sticky="w", pady=2)
-    
-    self.prop_status = ttk.Label(self.properties_frame, text="Status: -")
-    self.prop_status.grid(row=2, column=0, sticky="w", pady=2)
-    
-    self.prop_resolution = ttk.Label(self.properties_frame, text="Resolution: -")
-    self.prop_resolution.grid(row=3, column=0, sticky="w", pady=2)
-    
-    # Control buttons
-    button_frame = ttk.Frame(right_panel)
-    button_frame.grid(row=2, column=0, sticky="ew", pady=(10, 0))
-    
-    self.refresh_btn = ttk.Button(button_frame, text="Refresh List", command=self.refresh_ip_list)
-    self.refresh_btn.pack(side='left', padx=(0, 5))
-    
-    self.test_connection_btn = ttk.Button(button_frame, text="Test Connection", command=self.test_selected_camera)
-    self.test_connection_btn.pack(side='left')
+    def create_list_view(self):
+        list_frame = ttk.Frame(self.notebook)
+        self.notebook.add(list_frame, text="List View")
+        
+        list_frame.grid_rowconfigure(0, weight=1)
+        list_frame.grid_columnconfigure(0, weight=1)
+        list_frame.grid_columnconfigure(1, weight=2)
+        
+        # Left panel - scrollable list
+        left_panel = ttk.Frame(list_frame)
+        left_panel.grid(row=0, column=0, sticky="nsew", padx=(10, 5), pady=10)
+        left_panel.grid_rowconfigure(0, weight=1)
+        left_panel.grid_columnconfigure(0, weight=1)
+        
+        # Create treeview for list items
+        self.tree = ttk.Treeview(left_panel, columns=('Name', 'Status'), show='tree headings')
+        self.tree.heading('#0', text='ID')
+        self.tree.heading('Name', text='IP Address')
+        self.tree.heading('Status', text='Status')
+        
+        self.tree.column('#0', width=50)
+        self.tree.column('Name', width=150)
+        self.tree.column('Status', width=80)
+        
+        # Initialize camera data storage
+        self.camera_data = {}
+        self.current_preview_thread = None
+        self.preview_active = False
+        
+        # Load IP addresses and populate treeview
+        self.load_ip_addresses()
+        
+        # Scrollbar for treeview
+        tree_scroll = ttk.Scrollbar(left_panel, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=tree_scroll.set)
+        
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        tree_scroll.grid(row=0, column=1, sticky="ns")
+        
+        # Bind selection event
+        self.tree.bind('<<TreeviewSelect>>', self.on_item_select)
+        
+        # Right panel - details view
+        right_panel = ttk.Frame(list_frame)
+        right_panel.grid(row=0, column=1, sticky="nsew", padx=(5, 10), pady=10)
+        right_panel.grid_rowconfigure(1, weight=1)
+        right_panel.grid_columnconfigure(0, weight=1)
+        
+        # Image display area
+        self.image_frame = ttk.LabelFrame(right_panel, text="Camera Preview", padding=10)
+        self.image_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        
+        # Placeholder for image
+        self.image_label = ttk.Label(self.image_frame, text="Select a camera to view preview", 
+                                width=40, anchor='center')
+        self.image_label.grid(row=0, column=0, pady=20, ipady=50)
+        
+        # Properties frame
+        self.properties_frame = ttk.LabelFrame(right_panel, text="Properties", padding=10)
+        self.properties_frame.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
+        
+        # Properties labels
+        self.prop_name = ttk.Label(self.properties_frame, text="IP Address: Select a camera", font=('Arial', 10, 'bold'))
+        self.prop_name.grid(row=0, column=0, sticky="w", pady=2)
+        
+        self.prop_location = ttk.Label(self.properties_frame, text="Location: -")
+        self.prop_location.grid(row=1, column=0, sticky="w", pady=2)
+        
+        self.prop_status = ttk.Label(self.properties_frame, text="Status: -")
+        self.prop_status.grid(row=2, column=0, sticky="w", pady=2)
+        
+        self.prop_resolution = ttk.Label(self.properties_frame, text="Resolution: -")
+        self.prop_resolution.grid(row=3, column=0, sticky="w", pady=2)
+        
+        # Control buttons
+        button_frame = ttk.Frame(right_panel)
+        button_frame.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+        
+        self.refresh_btn = ttk.Button(button_frame, text="Refresh List", command=self.refresh_ip_list)
+        self.refresh_btn.pack(side='left', padx=(0, 5))
+        
+        self.test_connection_btn = ttk.Button(button_frame, text="Test Connection", command=self.test_selected_camera)
+        self.test_connection_btn.pack(side='left')
 
     def load_ip_addresses(self):
         """Load IP addresses from file and populate the treeview"""
@@ -642,7 +642,6 @@ def create_list_view(self):
                 # Update properties display
                 self.prop_name.config(text=f"Name: {selected_item['name']}")
                 self.prop_location.config(text=f"Location: {selected_item['location']}")
-                self.prop_ip.config(text=f"IP Address: {selected_item['ip']}")
                 self.prop_status.config(text=f"Status: {selected_item['status']}")
                 
                 # Update image placeholder
@@ -650,23 +649,12 @@ def create_list_view(self):
     
     def placeholder_action(self):
         messagebox.showinfo("Action", "This is a placeholder button action!")
-    
-    def open_preferences(self):
-        messagebox.showinfo("Settings", "Preferences dialog would open here")
-    
-    def open_network_config(self):
-        messagebox.showinfo("Settings", "Network configuration dialog would open here")
-    
-    def show_about(self):
-        messagebox.showinfo("About", "Main Application v1.0\nA comprehensive GUI application")
+
 
 def runmaingui():
     root = tk.Tk()
     app = MainGUI(root)
-    
-    # Handle window close event properly
     def on_closing():
         app.cleanup_on_close()
-    
     root.protocol("WM_DELETE_WINDOW", on_closing)
     root.mainloop()
