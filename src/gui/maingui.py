@@ -4,7 +4,12 @@ import psutil
 import time
 from datetime import datetime
 from PIL import Image, ImageTk
+from gui.rendermatrix import create_matrix_view as render_matrix
 import os
+import gui
+import settings
+
+ip_list_file = settings.ip_list_file
 
 class MainGUI:
     def __init__(self, root):
@@ -110,11 +115,104 @@ class MainGUI:
         matrix_frame = ttk.Frame(self.notebook)
         self.notebook.add(matrix_frame, text="Matrix View")
         
-        # Placeholder for matrix view
-        placeholder_label = ttk.Label(matrix_frame, text="Matrix View - To be implemented", 
-                                    font=('Arial', 16), foreground='gray')
-        placeholder_label.place(relx=0.5, rely=0.5, anchor='center')
+        # Configure frame for resizing
+        matrix_frame.grid_rowconfigure(0, weight=1)
+        matrix_frame.grid_columnconfigure(0, weight=1)
         
+        # Create canvas for matrix display
+        self.matrix_canvas = tk.Canvas(matrix_frame, bg='black')
+        self.matrix_canvas.grid(row=0, column=0, sticky="nsew")
+        
+        # Update matrix view periodically
+        self.update_matrix_display()
+            
+    def update_matrix_display(self):
+        """Update the matrix display with current camera streams (non-blocking version)"""
+        # Get canvas dimensions first (outside try block)
+        canvas_width = self.matrix_canvas.winfo_width()
+        canvas_height = self.matrix_canvas.winfo_height()
+        
+        if canvas_width <= 1 or canvas_height <= 1:
+            # Canvas not ready yet, try again later
+            self.root.after(100, self.update_matrix_display)
+            return
+        
+        try:
+            # Calculate cell dimensions (smaller to prevent memory issues)
+            cell_width = min(320, canvas_width // 4)
+            cell_height = min(240, canvas_height // 3)
+            
+            # Create matrix image (this is now non-blocking)
+            matrix_image = render_matrix(ip_range_start=1, ip_range_end=50, 
+                                        cell_width=cell_width, cell_height=cell_height)
+            
+            if matrix_image is not None:
+                # Import cv2 here to avoid issues if not available
+                import cv2
+                
+                # Convert CV2 image to PIL then to PhotoImage
+                matrix_rgb = cv2.cvtColor(matrix_image, cv2.COLOR_BGR2RGB)
+                pil_image = Image.fromarray(matrix_rgb)
+                
+                # Scale image to fit canvas
+                img_width, img_height = pil_image.size
+                scale_x = canvas_width / img_width
+                scale_y = canvas_height / img_height
+                scale = min(scale_x, scale_y, 1.0)  # Don't scale up
+                
+                new_width = int(img_width * scale)
+                new_height = int(img_height * scale)
+                
+                # Use LANCZOS for better quality, but catch errors
+                try:
+                    pil_image = pil_image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                except AttributeError:
+                    # Fallback for older PIL versions
+                    pil_image = pil_image.resize((new_width, new_height), Image.LANCZOS)
+                
+                # Keep reference to prevent garbage collection
+                self.matrix_photo = ImageTk.PhotoImage(pil_image)
+                
+                # Clear canvas and display image
+                self.matrix_canvas.delete("all")
+                self.matrix_canvas.create_image(canvas_width//2, canvas_height//2, 
+                                                image=self.matrix_photo, anchor="center")
+            else:
+                # No active streams - show status message
+                self.matrix_canvas.delete("all")
+                self.matrix_canvas.create_text(canvas_width//2, canvas_height//2, 
+                                                text="Initializing camera connections...\nPlease wait...", 
+                                                fill="white", font=('Arial', 16), justify="center")
+        
+        except ImportError as e:
+            # Handle missing cv2 or other import errors
+            self.matrix_canvas.delete("all")
+            self.matrix_canvas.create_text(canvas_width//2, canvas_height//2, 
+                                            text=f"Matrix renderer not available\nError: {e}", 
+                                            fill="white", font=('Arial', 12), justify="center")
+        except Exception as e:
+            # Handle any other errors gracefully
+            print(f"Matrix display error: {e}")
+            self.matrix_canvas.delete("all")
+            self.matrix_canvas.create_text(canvas_width//2, canvas_height//2, 
+                                            text=f"Display error: {str(e)[:50]}...", 
+                                            fill="red", font=('Arial', 12), justify="center")
+        
+        # Schedule next update (increased to 2 seconds to reduce load)
+        self.root.after(2000, self.update_matrix_display)
+        
+    def cleanup_on_close(self):
+        """Clean up resources when closing the application"""
+        try:
+            # Import and cleanup the camera manager
+            from gui.rendermatrix import cleanup_camera_manager
+            cleanup_camera_manager()
+        except ImportError:
+            pass
+        
+        # Destroy the root window
+        self.root.destroy()
+
     def create_list_view(self):
         list_frame = ttk.Frame(self.notebook)
         self.notebook.add(list_frame, text="List View")
@@ -277,4 +375,10 @@ class MainGUI:
 def runmaingui():
     root = tk.Tk()
     app = MainGUI(root)
+    
+    # Handle window close event properly
+    def on_closing():
+        app.cleanup_on_close()
+    
+    root.protocol("WM_DELETE_WINDOW", on_closing)
     root.mainloop()
