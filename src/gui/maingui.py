@@ -27,7 +27,6 @@ class MainGUI:
             print("Failed to load app icon, something might be up with your environment")
             pass
 
-
         # Configure grid weights for resizing
         self.root.grid_rowconfigure(1, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
@@ -154,7 +153,7 @@ class MainGUI:
             
             # Create matrix image (this is now non-blocking)
             matrix_image = render_matrix(ip_range_start=1, ip_range_end=50, 
-                                        cell_width=cell_width, cell_height=cell_height)
+                                        max_cell_width=cell_width, max_cell_height=cell_height)
             
             if matrix_image is not None:
                 # Import cv2 here to avoid issues if not available
