@@ -18,6 +18,11 @@ class MainGUI:
         self.root.geometry("1200x800")
         self.root.minsize(800, 600)
         
+        # Apply logo (not chatgpt generated I swaer)
+        ico = Image.open('assets/logo.png')
+        photo = ImageTk.PhotoImage(ico)
+        self.root.wm_iconphoto(False, photo)
+
         # Configure grid weights for resizing
         self.root.grid_rowconfigure(1, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
