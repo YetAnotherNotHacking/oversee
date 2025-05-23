@@ -93,7 +93,7 @@ def initialization_tasks(startupmenu):
     startupmenu.update_status("Both tasks complete! Formatting URLs and verifying connectivity...", 80.0)
     try:
         format_file(input_file=settings.insecam_output_file, output_file=settings.ip_list_file)
-        validate_file_address_reachable(max_workers=128)
+        validate_file_address_reachable(max_workers=256)
         startupmenu.update_status("Formatting completed", 90.0)
     except Exception as e:
         print(f"Formatting error: {e}")
