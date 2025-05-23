@@ -248,7 +248,6 @@ def _create_placeholder_matrix(cell_width, cell_height, message):
         if current_line:
             processed_lines.append(current_line)
     
-    # Draw text lines
     line_height = 30
     start_y = cell_height // 2 - (len(processed_lines) * line_height) // 2
     
