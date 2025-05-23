@@ -19,9 +19,14 @@ class MainGUI:
         self.root.minsize(800, 600)
         
         # Apply logo (not chatgpt generated I swaer)
-        ico = Image.open('assets/logo.png')
-        photo = ImageTk.PhotoImage(ico)
-        self.root.wm_iconphoto(False, photo)
+        try:
+            ico = Image.open('assets/logo.png')
+            photo = ImageTk.PhotoImage(ico)
+            self.root.wm_iconphoto(False, photo)
+        except:
+            print("Failed to load app icon, something might be up with your environment")
+            pass
+
 
         # Configure grid weights for resizing
         self.root.grid_rowconfigure(1, weight=1)
