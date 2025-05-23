@@ -1,52 +1,27 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox
 import psutil
 import time
 import threading
 from datetime import datetime
 from PIL import Image, ImageTk
+from gui.rendermatrix import create_matrix_view as render_matrix
+from utility.ip2loc import get_geolocation
+from utility.iplist import get_ip_range
 import os
+import gui
 import settings
 
-# Try to import optional modules
-try:
-    import cv2
-    CV2_AVAILABLE = True
-except ImportError:
-    CV2_AVAILABLE = False
-    print("OpenCV not available - camera preview will be disabled")
-
-try:
-    from gui.rendermatrix import create_matrix_view as render_matrix
-    MATRIX_AVAILABLE = True
-except ImportError:
-    MATRIX_AVAILABLE = False
-    print("Matrix renderer not available")
-
-try:
-    from utility.ip2loc import get_geolocation
-    GEOLOCATION_AVAILABLE = True
-except ImportError:
-    GEOLOCATION_AVAILABLE = False
-    print("Geolocation utility not available")
-
-try:
-    from utility.iplist import get_ip_range
-    IPLIST_AVAILABLE = True
-except ImportError:
-    IPLIST_AVAILABLE = False
-    print("IP list utility not available")
-
-ip_list_file = getattr(settings, 'ip_list_file', 'ip_list.txt')
+ip_list_file = settings.ip_list_file
 
 class MainGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title(f"SilverFlag | OVERSEE v{getattr(settings, 'overseeversion', '1.0')}")
+        self.root.title(f"SilverFlag | OVERSEE v{settings.overseeversion}")
         self.root.geometry("1200x800")
         self.root.minsize(800, 600)
         
-        # Apply logo (not chatgpt generated I swear)
+        # Apply logo (not chatgpt generated I swaer)
         try:
             ico = Image.open('assets/logo.png')
             photo = ImageTk.PhotoImage(ico)
@@ -71,11 +46,6 @@ class MainGUI:
             {"id": 102, "name": "Access Control", "count": 8, "location": "North Wing", "status": "Maintenance"},
             {"id": 103, "name": "Fire Safety", "count": 23, "location": "All Buildings", "status": "Active"},
         ]
-        
-        # Initialize camera data storage
-        self.camera_data = {}
-        self.current_preview_thread = None
-        self.preview_active = False
         
         self.setup_gui()
         self.update_system_info()
@@ -113,6 +83,9 @@ class MainGUI:
         settings_menu.add_command(label="Network Config", command=self.open_network_config)
         settings_menu.add_separator()
         settings_menu.add_command(label="About", command=self.show_about)
+    
+    def open_preferences(self):
+        messagebox.showinfo("Settings", "Preferences dialog would open here")
     
     def open_network_config(self):
         messagebox.showinfo("Settings", "Network configuration dialog would open here")
@@ -265,59 +238,58 @@ class MainGUI:
             return
         
         try:
-            if MATRIX_AVAILABLE:
-                # Calculate cell dimensions (smaller to prevent memory issues)
-                cell_width = min(320, canvas_width // 4)
-                cell_height = min(240, canvas_height // 3)
+            # Calculate cell dimensions (smaller to prevent memory issues)
+            cell_width = min(320, canvas_width // 4)
+            cell_height = min(240, canvas_height // 3)
+            
+            # Create matrix image (this is now non-blocking)
+            matrix_image = render_matrix(ip_range_start=1, ip_range_end=50, 
+                                        max_cell_width=cell_width, max_cell_height=cell_height)
+            
+            if matrix_image is not None:
+                # Import cv2 here to avoid issues if not available
+                import cv2
                 
-                # Create matrix image (this is now non-blocking)
-                matrix_image = render_matrix(ip_range_start=1, ip_range_end=50, 
-                                            max_cell_width=cell_width, max_cell_height=cell_height)
+                # Convert CV2 image to PIL then to PhotoImage
+                matrix_rgb = cv2.cvtColor(matrix_image, cv2.COLOR_BGR2RGB)
+                pil_image = Image.fromarray(matrix_rgb)
                 
-                if matrix_image is not None and CV2_AVAILABLE:
-                    # Import cv2 here to avoid issues if not available
-                    import cv2
-                    
-                    # Convert CV2 image to PIL then to PhotoImage
-                    matrix_rgb = cv2.cvtColor(matrix_image, cv2.COLOR_BGR2RGB)
-                    pil_image = Image.fromarray(matrix_rgb)
-                    
-                    # Scale image to fit canvas
-                    img_width, img_height = pil_image.size
-                    scale_x = canvas_width / img_width
-                    scale_y = canvas_height / img_height
-                    scale = min(scale_x, scale_y, 1.0)  # Don't scale up
-                    
-                    new_width = int(img_width * scale)
-                    new_height = int(img_height * scale)
-                    
-                    # Use LANCZOS for better quality, but catch errors
-                    try:
-                        pil_image = pil_image.resize((new_width, new_height), Image.Resampling.LANCZOS)
-                    except AttributeError:
-                        # Fallback for older PIL versions
-                        pil_image = pil_image.resize((new_width, new_height), Image.LANCZOS)
-                    
-                    # Keep reference to prevent garbage collection
-                    self.matrix_photo = ImageTk.PhotoImage(pil_image)
-                    
-                    # Clear canvas and display image
-                    self.matrix_canvas.delete("all")
-                    self.matrix_canvas.create_image(canvas_width//2, canvas_height//2, 
-                                                    image=self.matrix_photo, anchor="center")
-                else:
-                    # No active streams - show status message
-                    self.matrix_canvas.delete("all")
-                    self.matrix_canvas.create_text(canvas_width//2, canvas_height//2, 
-                                                    text="Initializing camera connections...\nPlease wait...", 
-                                                    fill="white", font=('Arial', 16), justify="center")
+                # Scale image to fit canvas
+                img_width, img_height = pil_image.size
+                scale_x = canvas_width / img_width
+                scale_y = canvas_height / img_height
+                scale = min(scale_x, scale_y, 1.0)  # Don't scale up
+                
+                new_width = int(img_width * scale)
+                new_height = int(img_height * scale)
+                
+                # Use LANCZOS for better quality, but catch errors
+                try:
+                    pil_image = pil_image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                except AttributeError:
+                    # Fallback for older PIL versions
+                    pil_image = pil_image.resize((new_width, new_height), Image.LANCZOS)
+                
+                # Keep reference to prevent garbage collection
+                self.matrix_photo = ImageTk.PhotoImage(pil_image)
+                
+                # Clear canvas and display image
+                self.matrix_canvas.delete("all")
+                self.matrix_canvas.create_image(canvas_width//2, canvas_height//2, 
+                                                image=self.matrix_photo, anchor="center")
             else:
-                # Matrix renderer not available
+                # No active streams - show status message
                 self.matrix_canvas.delete("all")
                 self.matrix_canvas.create_text(canvas_width//2, canvas_height//2, 
-                                                text="Matrix renderer not available", 
+                                                text="Initializing camera connections...\nPlease wait...", 
                                                 fill="white", font=('Arial', 16), justify="center")
         
+        except ImportError as e:
+            # Handle missing cv2 or other import errors
+            self.matrix_canvas.delete("all")
+            self.matrix_canvas.create_text(canvas_width//2, canvas_height//2, 
+                                            text=f"Matrix renderer not available\nError: {e}", 
+                                            fill="white", font=('Arial', 12), justify="center")
         except Exception as e:
             # Handle any other errors gracefully
             print(f"Matrix display error: {e}")
@@ -332,13 +304,9 @@ class MainGUI:
     def cleanup_on_close(self):
         """Clean up resources when closing the application"""
         try:
-            # Stop camera preview
-            self.preview_active = False
-            
-            if MATRIX_AVAILABLE:
-                # Import and cleanup the camera manager
-                from gui.rendermatrix import cleanup_camera_manager
-                cleanup_camera_manager()
+            # Import and cleanup the camera manager
+            from gui.rendermatrix import cleanup_camera_manager
+            cleanup_camera_manager()
         except ImportError:
             pass
         
@@ -368,6 +336,11 @@ class MainGUI:
         self.tree.column('#0', width=50)
         self.tree.column('Name', width=150)
         self.tree.column('Status', width=80)
+        
+        # Initialize camera data storage
+        self.camera_data = {}
+        self.current_preview_thread = None
+        self.preview_active = False
         
         # Load IP addresses and populate treeview
         self.load_ip_addresses()
@@ -431,12 +404,8 @@ class MainGUI:
             for item in self.tree.get_children():
                 self.tree.delete(item)
             
-            if IPLIST_AVAILABLE:
-                # Get IP addresses from file (loading first 100 for performance)
-                ip_list = get_ip_range(ip_list_file, 1, 100)
-            else:
-                # Fallback to sample IPs if utility not available
-                ip_list = [f"192.168.1.{i}" for i in range(10, 20)]
+            # Get IP addresses from file (loading first 100 for performance)
+            ip_list = get_ip_range(settings.ip_list_file, 1, 100)
             
             # Populate treeview with IP addresses
             for i, ip in enumerate(ip_list, 1):
@@ -462,13 +431,8 @@ class MainGUI:
     def check_camera_status(self, item_id, ip):
         """Check if camera is accessible and update status"""
         try:
-            if not CV2_AVAILABLE:
-                self.camera_data[item_id]['status'] = 'OpenCV Not Available'
-                self.tree.after(0, lambda: self.update_tree_item(item_id, ip, "OpenCV Not Available"))
-                return
-                
             # Try to connect to camera
-            cap = cv2.VideoCapture(f"http://{ip}/video")  # Adjust URL format as needed
+            cap = cv2.VideoCapture(ip)  # Adjust URL format as needed
             
             if cap.isOpened():
                 ret, frame = cap.read()
@@ -500,11 +464,8 @@ class MainGUI:
         
         # Get location information
         try:
-            if GEOLOCATION_AVAILABLE:
-                location = get_geolocation(ip)
-                self.camera_data[item_id]['location'] = location
-            else:
-                self.camera_data[item_id]['location'] = "Location service unavailable"
+            location = get_geolocation(ip)
+            self.camera_data[item_id]['location'] = location
         except Exception as e:
             self.camera_data[item_id]['location'] = "Location unavailable"
 
@@ -534,14 +495,11 @@ class MainGUI:
         self.prop_status.config(text=f"Status: {camera_info['status']}")
         self.prop_resolution.config(text=f"Resolution: {camera_info.get('resolution', '-')}")
         
-        # Start camera preview if online and OpenCV is available
-        if camera_info['status'] == 'Online' and CV2_AVAILABLE:
+        # Start camera preview if online
+        if camera_info['status'] == 'Online':
             self.start_camera_preview(ip)
         else:
-            status_msg = camera_info['status']
-            if not CV2_AVAILABLE:
-                status_msg = "OpenCV not available for preview"
-            self.image_label.config(image='', text=f"Camera {status_msg}")
+            self.image_label.config(image='', text=f"Camera {camera_info['status']}")
 
     def start_camera_preview(self, ip):
         """Start camera preview in a separate thread"""
@@ -559,9 +517,6 @@ class MainGUI:
 
     def camera_preview_worker(self, ip):
         """Worker thread for camera preview"""
-        if not CV2_AVAILABLE:
-            return
-            
         try:
             cap = cv2.VideoCapture(f"http://{ip}/video")  # Adjust URL format as needed
             
@@ -607,7 +562,6 @@ class MainGUI:
         """Test connection to selected camera"""
         selection = self.tree.selection()
         if not selection:
-            messagebox.showwarning("No Selection", "Please select a camera to test")
             return
         
         item_id = selection[0]
@@ -622,6 +576,11 @@ class MainGUI:
         # Start test in background thread
         threading.Thread(target=self.check_camera_status, 
                     args=(item_id, ip), daemon=True).start()
+        
+        # Three filler buttons
+        ttk.Button(buttons_frame, text="Button 1", command=self.placeholder_action).grid(row=0, column=0, padx=2, pady=5, sticky="ew")
+        ttk.Button(buttons_frame, text="Button 2", command=self.placeholder_action).grid(row=0, column=1, padx=2, pady=5, sticky="ew")
+        ttk.Button(buttons_frame, text="Button 3", command=self.placeholder_action).grid(row=0, column=2, padx=2, pady=5, sticky="ew")
         
     def create_status_bar(self):
         status_frame = ttk.Frame(self.root, relief=tk.SUNKEN, borderwidth=1)
@@ -672,21 +631,21 @@ class MainGUI:
         # Schedule next update
         self.root.after(1000, self.update_system_info)
     
-    def on_item_select(self, event):
-        selection = self.tree.selection()
-        if selection:
-            item_id = self.tree.item(selection[0])['text']
-            # Find the item data
-            selected_item = next((item for item in self.list_items if str(item['id']) == item_id), None)
+    # def on_item_select(self, event):
+    #     selection = self.tree.selection()
+    #     if selection:
+    #         item_id = self.tree.item(selection[0])['text']
+    #         # Find the item data
+    #         selected_item = next((item for item in self.list_items if str(item['id']) == item_id), None)
             
-            if selected_item:
-                # Update properties display
-                self.prop_name.config(text=f"Name: {selected_item['name']}")
-                self.prop_location.config(text=f"Location: {selected_item['location']}")
-                self.prop_status.config(text=f"Status: {selected_item['status']}")
+    #         if selected_item:
+    #             # Update properties display
+    #             self.prop_name.config(text=f"Name: {selected_item['name']}")
+    #             self.prop_location.config(text=f"Location: {selected_item['location']}")
+    #             self.prop_status.config(text=f"Status: {selected_item['status']}")
                 
-                # Update image placeholder
-                self.image_label.config(text=f"Image for {selected_item['name']}\n(ID: {item_id})")
+    #             # Update image placeholder
+    #             self.image_label.config(text=f"Image for {selected_item['name']}\n(ID: {item_id})")
     
     def placeholder_action(self):
         messagebox.showinfo("Action", "This is a placeholder button action!")
