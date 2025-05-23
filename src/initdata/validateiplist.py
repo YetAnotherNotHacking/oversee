@@ -153,7 +153,7 @@ def validate_file_address_reachable(max_workers: int = 10):
                     Adjust based on your system capabilities and network limits
     """
     filename = settings.ip_list_file
-    timeout = 5
+    timeout = 10
     
     thread_safe_log('info', f"Testing cameras from file: {filename}")
     thread_safe_log('info', f"Timeout per camera: {timeout} seconds")
@@ -167,7 +167,4 @@ def test_and_update_ips(filename: str, timeout: int = 5) -> None:
     test_and_update_ips_threaded(filename, timeout, max_workers=10)
 
 if __name__ == "__main__":
-    # You can adjust max_workers based on your needs
-    # More workers = faster testing, but more network/system load
-    # Recommended: 5-20 workers depending on your system and network
     validate_file_address_reachable(max_workers=10)
