@@ -14,6 +14,17 @@ camera_metadata = {}
 camera_borders = {}
 frame_lock = threading.Lock()
 
+default_stream_params = {
+    "nphMotionJpeg": "?Resolution=640x480&Quality=Standard",
+    "faststream.jpg": "?stream=half&fps=16",
+    "SnapshotJPEG": "?Resolution=640x480&amp;Quality=Clarity&amp;1746245729",
+    "cgi-bin/camera": "?resolution=640&amp;quality=1&amp;Language=0",
+    "GetLiveImage": "?connection_id=e0e2-4978d822",
+    "GetOneShot": "?image_size=640x480&frame_count=1000000000",
+    "webcapture.jpg": "?command=snap&channel=1",
+    "snap.jpg": "?JpegSize=M&JpegCam=1"
+}
+
 def should_poll_jpeg(url):
     """Determine if URL should be polled as JPEG."""
     lower = url.lower()
@@ -58,7 +69,7 @@ def get_camera_border_color(camera_id):
         return camera_borders.get(camera_id, (255, 255, 255))
 
 def capture_single_frame(camera_url, timeout=5):
-    """Capture a single frame from a camera for preview purposes."""
+    """Capture a single frame from a camera for preview purposes. Normalling this is in the list, since the list does not need to constantly update"""
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -69,7 +80,7 @@ def capture_single_frame(camera_url, timeout=5):
         req = urllib.request.Request(full_url, headers=headers)
         
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            img_data = resp.read(2 * 1024 * 1024)  # 2MB limit for preview
+            img_data = resp.read(3 * 1024 * 1024)  # 3MB limit for preview
             
             if not img_data:
                 return None
@@ -103,9 +114,7 @@ def frame_to_pil_image(frame):
         return None
 
 def read_stream(input_id, frames, borders, lock):
-    """Main camera stream reading function."""
     try:
-        # Store metadata about the camera
         with lock:
             if input_id not in camera_metadata:
                 camera_metadata[input_id] = {
