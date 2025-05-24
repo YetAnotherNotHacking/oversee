@@ -416,7 +416,6 @@ class MainGUI:
                         'last_check': time.time()
                     })
                     
-                    # Update treeview in main thread
                     self.tree.after(0, lambda: self.update_tree_item(item_id, ip, "Online"))
                 else:
                     self.camera_data[item_id]['status'] = 'No Signal'
