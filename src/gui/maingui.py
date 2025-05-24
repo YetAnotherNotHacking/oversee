@@ -397,37 +397,6 @@ class MainGUI:
         self.test_connection_btn = ttk.Button(button_frame, text="Test Connection", command=self.test_selected_camera)
         self.test_connection_btn.pack(side='left')
 
-    def load_ip_addresses(self):
-        """Load IP addresses from file and populate the treeview"""
-        try:
-            # Clear existing items
-            for item in self.tree.get_children():
-                self.tree.delete(item)
-            
-            # Get IP addresses from file (loading first 100 for performance)
-            ip_list = get_ip_range(settings.ip_list_file, 1, 100)
-            
-            # Populate treeview with IP addresses
-            for i, ip in enumerate(ip_list, 1):
-                item_id = self.tree.insert('', 'end', text=str(i), 
-                                        values=(ip, "Unknown"))
-                
-                # Initialize camera data
-                self.camera_data[item_id] = {
-                    'ip': ip,
-                    'status': 'Unknown',
-                    'location': None,
-                    'resolution': None,
-                    'last_check': None
-                }
-                
-                # Start background thread to check camera status
-                threading.Thread(target=self.check_camera_status, 
-                            args=(item_id, ip), daemon=True).start()
-                
-        except Exception as e:
-            print(f"Error loading IP addresses: {e}")
-
     def check_camera_status(self, item_id, ip):
         """Check if camera is accessible and update status"""
         try:
@@ -468,6 +437,37 @@ class MainGUI:
             self.camera_data[item_id]['location'] = location
         except Exception as e:
             self.camera_data[item_id]['location'] = "Location unavailable"
+
+    def load_ip_addresses(self):
+        """Load IP addresses from file and populate the treeview"""
+        try:
+            # Clear existing items
+            for item in self.tree.get_children():
+                self.tree.delete(item)
+            
+            # Get IP addresses from file (loading first 100 for performance)
+            ip_list = get_ip_range(settings.ip_list_file, 1, 100)
+            
+            # Populate treeview with IP addresses
+            for i, ip in enumerate(ip_list, 1):
+                item_id = self.tree.insert('', 'end', text=str(i), 
+                                        values=(ip, "Unknown"))
+                
+                # Initialize camera data
+                self.camera_data[item_id] = {
+                    'ip': ip,
+                    'status': 'Unknown',
+                    'location': None,
+                    'resolution': None,
+                    'last_check': None
+                }
+                
+                # Start background thread to check camera status
+                threading.Thread(target=self.check_camera_status, 
+                            args=(item_id, ip), daemon=True).start()
+                
+        except Exception as e:
+            print(f"Error loading IP addresses: {e}")
 
     def update_tree_item(self, item_id, ip, status):
         """Update treeview item with new status"""

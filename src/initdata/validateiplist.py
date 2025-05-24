@@ -106,19 +106,9 @@ def test_and_update_ips(filename: str, timeout: int = 5) -> None:
     else:
         logging.warning("No working IPs found!")
 
-def main():
-    """Main entry point."""
-    if len(sys.argv) < 2:
-        print("Usage: python ip_camera_tester.py <ip_file> [timeout]")
-        print("Example: python ip_camera_tester.py cameras.txt 10")
-        sys.exit(1)
-    
-    filename = sys.argv[1]
-    timeout = int(sys.argv[2]) if len(sys.argv) > 2 else 5
-    
+def validate_file_address_reachable(filename, timeout):
     logging.info(f"Testing cameras from file: {filename}")
     logging.info(f"Timeout per camera: {timeout} seconds")
-    
     test_and_update_ips(filename, timeout)
 
 if __name__ == "__main__":
