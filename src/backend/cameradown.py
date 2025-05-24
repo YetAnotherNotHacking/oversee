@@ -45,7 +45,12 @@ def should_poll_jpeg(url):
 
 def add_custom_params(url):
     """Add custom parameters to URL if needed."""
-    # Add any custom parameters for camera access
+    # Check if URL contains any of the known endpoints
+    for endpoint, params in default_stream_params.items():
+        if endpoint.lower() in url.lower():
+            # Add parameters if they don't already exist
+            if "?" not in url:
+                return f"{url}{params}"
     return url
 
 def get_camera_frame(camera_id):
