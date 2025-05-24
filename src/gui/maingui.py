@@ -439,12 +439,13 @@ class MainGUI:
             self.camera_data[item_id]['location'] = "Location unavailable"
 
     def load_ip_addresses(self):
-        """Load IP addresses from file and populate the treeview"""
+        """Load IP addressses from file and populate the treeview"""
         try:
             # Clear existing items
             for item in self.tree.get_children():
                 self.tree.delete(item)
             
+            # TODO: make this read the 
             # Get IP addresses from file (loading first 100 for performance)
             ip_list = get_ip_range(settings.ip_list_file, 1, 100)
             
