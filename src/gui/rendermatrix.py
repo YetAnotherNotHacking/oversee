@@ -7,6 +7,12 @@ import queue
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from utility.iplist import get_ip_range
 import settings
+from datetime import datetime
+import sqlite3
+import os
+import urllib.request
+import urllib.parse
+from backend.cameradown import capture_single_frame, default_stream_params
 
 # Import the camera backend functions
 try:
@@ -18,208 +24,375 @@ except ImportError:
     camera_frames = {}
     frame_lock = None
 
-class CameraStreamManager:
-    """Manages camera streams in background threads to prevent UI blocking"""
-    
+class CameraManager:
     def __init__(self):
-        self.active_streams = set()
-        self.stream_status = {}  # Track status of each stream
-        self.initialization_lock = threading.Lock()
-        self.pending_streams = set()  # Streams that are being initialized
-        self.failed_streams = set()  # Streams that have failed
-        self.connection_timestamps = {}  # Track when connections started
-        self.max_connection_time = 30  # Max seconds to wait for connection
+        self.frames = {}
+        self.borders = {}
+        self.labels = {}
+        self.lock = threading.Lock()
+        self.active = False
+        self.threads = {}
+        self.executor = ThreadPoolExecutor(max_workers=200)  # Increased from 20 to 200
+        self.last_update = 0
+        self.update_interval = 2.0  # Update every 2 seconds
+        self.db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'cameras.db')
+        self.camera_metadata = {}
+        self.camera_urls = []
+        self.url_lock = threading.Lock()
+        self.connection_semaphore = threading.Semaphore(200)  # Increased from 20 to 200
+        self.frame_lock = threading.Lock()
+        self.last_matrix_update = 0
+        self.matrix_update_interval = 0.1  # Update matrix every 100ms
         
-    def get_all_camera_frames(self):
-        """
-        Get all camera frames from the camera backend (non-blocking).
+        # Initialize database
+        self.init_database()
+    
+    def init_database(self):
+        """Initialize SQLite database for camera status tracking"""
+        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         
-        Returns:
-            dict: Dictionary mapping camera_id to frame data
-        """
-        if not CAMERA_BACKEND_AVAILABLE:
-            return {}
+        # Create initial connection to set up database
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
         
+        # Create cameras table if it doesn't exist
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS cameras (
+                ip TEXT PRIMARY KEY,
+                status TEXT,
+                last_check TIMESTAMP,
+                resolution TEXT,
+                stream_type TEXT,
+                endpoint TEXT,
+                location TEXT
+            )
+        ''')
+        conn.commit()
+        conn.close()
+    
+    def get_thread_db_connection(self):
+        """Create a new database connection for the current thread"""
+        return sqlite3.connect(self.db_path, check_same_thread=False)
+    
+    def update_camera_status(self, ip, status, resolution=None, stream_type=None, endpoint=None, location=None):
+        """Update camera status in database"""
         try:
-            if frame_lock is not None:
-                # Use timeout to prevent blocking
-                if frame_lock.acquire(timeout=0.1):
-                    try:
-                        return camera_frames.copy()
-                    finally:
-                        frame_lock.release()
-                else:
-                    print("Warning: Could not acquire frame lock, returning empty frames")
-                    return {}
-            else:
-                return camera_frames.copy()
+            # Create a new connection for this thread
+            conn = self.get_thread_db_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT OR REPLACE INTO cameras 
+                (ip, status, last_check, resolution, stream_type, endpoint, location)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (ip, status, datetime.now(), resolution, stream_type, endpoint, location))
+            conn.commit()
+            conn.close()
         except Exception as e:
-            print(f"Error getting camera frames: {e}")
-            return {}
-
-    def _start_single_camera_stream_async(self, camera_url):
-        """
-        Start a single camera stream asynchronously without blocking.
-        This runs in a separate thread and doesn't wait for frames.
-        
-        Args:
-            camera_url: Full camera URL (e.g., "202.245.13.81:80/cgi-bin/camera")
-        """
-        if not CAMERA_BACKEND_AVAILABLE:
-            return
-            
+            print(f"Error updating camera status in database: {e}")
+    
+    def get_online_cameras(self):
+        """Get list of online cameras from database"""
         try:
-            print(f"Starting async stream for: {camera_url}")
-            
-            # Mark as pending with timestamp
-            with self.initialization_lock:
-                self.pending_streams.add(camera_url)
-                self.stream_status[camera_url] = 'connecting'
-                self.connection_timestamps[camera_url] = time.time()
-            
-            # Start the camera stream (this creates its own thread)
-            start_camera_stream(camera_url)
-            
-            # Mark as active immediately (the actual streaming happens in cameradown.py)
-            with self.initialization_lock:
-                self.active_streams.add(camera_url)
-                self.pending_streams.discard(camera_url)
-                self.stream_status[camera_url] = 'active'
-            
-            print(f"Stream thread started for: {camera_url}")
+            conn = self.get_thread_db_connection()
+            cursor = conn.cursor()
+            cursor.execute('SELECT ip, status FROM cameras WHERE status = "Online"')
+            cameras = cursor.fetchall()
+            conn.close()
+            return cameras
+        except Exception as e:
+            print(f"Error getting online cameras: {e}")
+            return []
+    
+    def should_poll_jpeg(self, url):
+        """Check if URL should be polled as JPEG stream"""
+        lower = url.lower()
+        return any(p in lower for p in [
+            "/cgi-bin/camera",
+            "/snapshotjpeg",
+            "/oneshotimage1",
+            "/oneshotimage2",
+            "/oneshotimage3",
+            "/getoneshot",
+            "/nphmotionjpeg",
+            "/cam1ir",
+            "/cam1color",
+            "/image",
+            ".jpg",
+            ".jpeg"
+        ])
+    
+    def add_custom_params(self, url):
+        """Add appropriate parameters to camera URL"""
+        for endpoint, params in default_stream_params.items():
+            if endpoint.lower() in url.lower():
+                if '?' not in url:
+                    return f"{url}{params}"
+                break
+        return url
+    
+    def load_camera_urls(self):
+        """Load camera URLs from file once and cache them"""
+        if not self.camera_urls:  # Only load if not already loaded
+            try:
+                # Get the correct path to the IP list file
+                ip_list_path = os.path.join(os.path.dirname(__file__), '..', '..', 'rawips.txt')
+                if not os.path.exists(ip_list_path):
+                    ip_list_path = os.path.join(os.getcwd(), 'rawips.txt')
                 
-        except Exception as e:
-            print(f"Failed to start stream thread for {camera_url}: {e}")
-            with self.initialization_lock:
-                self.pending_streams.discard(camera_url)
-                self.failed_streams.add(camera_url)
-                self.stream_status[camera_url] = 'failed'
-
-    def _cleanup_timed_out_connections(self):
-        """Remove connections that have been pending too long"""
-        current_time = time.time()
-        timed_out = []
+                print(f"Loading camera URLs from: {ip_list_path}")
+                
+                # Read all URLs from file
+                with open(ip_list_path, 'r') as f:
+                    urls = [line.strip() for line in f if line.strip()]
+                
+                # Format URLs properly
+                formatted_urls = []
+                for url in urls:
+                    if '/' in url:
+                        base_ip, endpoint = url.split('/', 1)
+                        formatted_url = f"http://{base_ip}/{endpoint}"
+                    else:
+                        formatted_url = f"http://{url}/video"
+                    formatted_urls.append(formatted_url)
+                
+                with self.url_lock:
+                    self.camera_urls = formatted_urls
+                print(f"Loaded {len(self.camera_urls)} camera URLs")
+                
+            except Exception as e:
+                    print(f"Error loading camera URLs: {e}")
+                    return []
         
-        with self.initialization_lock:
-            for camera_url in list(self.pending_streams):
-                if camera_url in self.connection_timestamps:
-                    elapsed = current_time - self.connection_timestamps[camera_url]
-                    if elapsed > self.max_connection_time:
-                        timed_out.append(camera_url)
-            
-            for camera_url in timed_out:
-                print(f"Connection timeout for {camera_url}")
-                self.pending_streams.discard(camera_url)
-                self.failed_streams.add(camera_url)
-                self.stream_status[camera_url] = 'failed'
-                self.connection_timestamps.pop(camera_url, None)
-
-    def ensure_camera_streams_started(self, camera_urls):
-        """
-        Ensure camera streams are started for the given camera URLs (completely non-blocking).
+        return self.camera_urls
+    
+    def read_stream(self, camera_url):
+        """Read camera stream and update frames dictionary"""
+        # Initialize metadata
+        with self.lock:
+            if camera_url not in self.camera_metadata:
+                self.camera_metadata[camera_url] = {
+                    "first_seen": time.time(),
+                    "frames_received": 0,
+                    "last_frame_time": 0,
+                    "fps": 0,
+                    "resolution": "Unknown",
+                    "stream_type": "Unknown",
+                    "endpoint": "Unknown",
+                    "connection_attempts": 0,
+                    "connection_failures": 0,
+                    "last_success": 0
+                }
         
-        Args:
-            camera_urls: List of camera URLs to start streams for
-        """
-        if not CAMERA_BACKEND_AVAILABLE:
-            return
+        # Format URL properly
+        full_url = self.add_custom_params(camera_url)
         
-        # Clean up timed out connections first
-        self._cleanup_timed_out_connections()
+        # Stream handling parameters
+        max_consecutive_failures = 3  # Reduced from 5 to 3
+        consecutive_failures = 0
+        min_timeout = 0.5  # Reduced from 1.0 to 0.5
+        max_timeout = 2.0  # Reduced from 3.0 to 2.0
+        current_timeout = min_timeout
+        last_fps_time = time.time()
+        frames_count = 0
         
-        # Start streams for any URLs that aren't already active, pending, or failed
-        for camera_url in camera_urls:
-            with self.initialization_lock:
-                if (camera_url not in self.active_streams and 
-                    camera_url not in self.pending_streams and 
-                    camera_url not in self.failed_streams):
-                    # Start each camera stream in its own thread immediately
-                    thread = threading.Thread(
-                        target=self._start_single_camera_stream_async,
-                        args=(camera_url,),
-                        name=f"CameraInit-{camera_url}",
-                        daemon=True
-                    )
-                    thread.start()
-
-    def get_connecting_or_active_cameras(self, camera_urls):
-        """
-        Get list of cameras that are either connecting or have frames.
-        Excludes failed cameras.
-        
-        Args:
-            camera_urls: List of all camera URLs
-            
-        Returns:
-            list: Filtered list of camera URLs that should be displayed
-        """
-        frames = self.get_all_camera_frames()
-        display_cameras = []
-        
-        with self.initialization_lock:
-            for camera_url in camera_urls:
-                # Include if: has frames, is connecting, or is active but no frames yet
-                if (camera_url in frames and frames[camera_url] is not None) or \
-                   (camera_url in self.pending_streams) or \
-                   (camera_url in self.active_streams and camera_url not in self.failed_streams):
-                    display_cameras.append(camera_url)
-        
-        return display_cameras
-
-    def get_camera_border_color(self, camera_id):
-        """
-        Get border color for a camera based on its status.
-        
-        Args:
-            camera_id: String identifier for the camera
-            
-        Returns:
-            tuple: BGR color tuple for the border
-        """
-        colors = {
-            'active': (0, 255, 0),      # Green - receiving frames
-            'connecting': (0, 255, 255), # Yellow - connecting
-            'failed': (0, 0, 255),      # Red - failed
-            'no_frames': (255, 0, 0),   # Blue - stream active but no frames yet
-            'default': (128, 128, 128)  # Gray - unknown
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Connection": "close"
         }
         
-        # Check current status
-        with self.initialization_lock:
-            if camera_id in self.pending_streams:
-                return colors['connecting']
+        while self.active:
+            try:
+                # Acquire semaphore before attempting connection
+                with self.connection_semaphore:
+                    # Mark connection attempt
+                    with self.lock:
+                        self.camera_metadata[camera_url]["connection_attempts"] += 1
+                    
+                    if self.should_poll_jpeg(full_url):
+                        # Handle JPEG polling
+                        req = urllib.request.Request(full_url, headers=headers)
+                        with urllib.request.urlopen(req, timeout=current_timeout) as resp:
+                            img_data = resp.read(2 * 1024 * 1024)  # Reduced from 5MB to 2MB
+                            
+                            if not img_data:
+                                raise ValueError("Empty image data received")
+                            
+                            img_array = np.asarray(bytearray(img_data), dtype=np.uint8)
+                            frame = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+                    else:
+                        # Handle other stream types
+                        frame = capture_single_frame(full_url)
+                    
+                    if frame is not None and frame.size > 0:
+                        # Verify frame dimensions
+                        if frame.shape[0] > 0 and frame.shape[1] > 0 and frame.shape[2] == 3:
+                            # Reset failure counter on success
+                            consecutive_failures = 0
+                            current_timeout = max(min_timeout, current_timeout * 0.9)
+                            
+                            # Mark success
+                            with self.lock:
+                                self.camera_metadata[camera_url]["last_success"] = time.time()
+                            
+                            # Resize larger frames
+                            if frame.shape[0] > 720 or frame.shape[1] > 1280:  # Reduced from 1080/1920
+                                if frame.shape[1] > frame.shape[0]:  # Landscape
+                                    scale = min(1.0, 1280 / frame.shape[1])
+                                else:  # Portrait
+                                    scale = min(1.0, 720 / frame.shape[0])
+                                
+                                new_width = int(frame.shape[1] * scale)
+                                new_height = int(frame.shape[0] * scale)
+                                frame = cv2.resize(frame, (new_width, new_height), 
+                                                 interpolation=cv2.INTER_AREA)
+                            
+                            # Update frame
+                            with self.frame_lock:
+                                self.frames[camera_url] = frame.copy()
+                                self.camera_metadata[camera_url]["frames_received"] += 1
+                                self.camera_metadata[camera_url]["last_frame_time"] = time.time()
+                                self.camera_metadata[camera_url]["resolution"] = f"{frame.shape[1]}x{frame.shape[0]}"
+                                
+                                # Calculate FPS
+                                frames_count += 1
+                                now = time.time()
+                                time_diff = now - last_fps_time
+                                if time_diff >= 5:  # Update FPS every 5 seconds
+                                    self.camera_metadata[camera_url]["fps"] = round(frames_count / time_diff, 1)
+                                    frames_count = 0
+                                    last_fps_time = now
+                            
+                            # Adaptive sleep based on FPS
+                            fps = self.camera_metadata[camera_url]["fps"]
+                            if fps > 0:
+                                target_fps = 2  # Reduced from 5 to 2
+                                max_sleep_time = 0.2  # Reduced from 0.5 to 0.2
+                                
+                                if fps > target_fps:
+                                    sleep_time = min(max_sleep_time, 1.0 / target_fps - 1.0 / fps)
+                                    if sleep_time > 0.01:
+                                        time.sleep(sleep_time)
+                        else:
+                            consecutive_failures += 1
+                            print(f"[{camera_url}] Invalid frame dimensions: {frame.shape}")
+                    else:
+                        consecutive_failures += 1
+                        print(f"[{camera_url}] Failed to decode image")
+                        
+            except Exception as e:
+                consecutive_failures += 1
+                with self.lock:
+                    self.camera_metadata[camera_url]["connection_failures"] += 1
+                
+                # Increase timeout on failure
+                current_timeout = min(max_timeout, current_timeout * 1.2)
+                print(f"[{camera_url}] Stream error: {e}")
+                
+                # Progressive backoff
+                backoff_time = min(2.0, 0.1 * (2 ** min(consecutive_failures, 3)))  # Reduced max backoff
+                time.sleep(backoff_time)
+    
+    def start_camera(self, camera_url):
+        """Start a camera stream if not already running"""
+        if camera_url not in self.threads or not self.threads[camera_url]:
+            # Use thread pool instead of creating new threads
+            self.executor.submit(self.read_stream, camera_url)
+            self.threads[camera_url] = True  # Just mark that we've started this camera
+    
+    def stop_all_cameras(self):
+        """Stop all camera streams"""
+        self.active = False
+        self.executor.shutdown(wait=False)
+        self.threads.clear()
+        self.frames.clear()
+        self.camera_metadata.clear()
+    
+    def create_matrix_view(self, width, height):
+        """Create matrix view of all active cameras"""
+        try:
+            # Load camera URLs if not already loaded
+            if not self.camera_urls:
+                self.load_camera_urls()
             
-            status = self.stream_status.get(camera_id, 'default')
+            if not self.camera_urls:
+                return self._create_error_matrix(width, height, "No camera URLs found")
             
-            # Check if we have recent frames
-            frames = self.get_all_camera_frames()
-            if camera_id in frames and frames[camera_id] is not None:
-                return colors['active']
-            elif camera_id in self.active_streams:
-                return colors['no_frames']  # Stream started but no frames yet
-            elif status == 'failed':
-                return colors['failed']
-            else:
-                return colors['default']
-
-    def get_stream_stats(self):
-        """Get statistics about stream status"""
-        with self.initialization_lock:
-            stats = {
-                'active_streams': len(self.active_streams),
-                'pending_streams': len(self.pending_streams),
-                'failed_streams': len(self.failed_streams),
-                'total_attempted': len(self.stream_status)
-            }
+            # Start camera streams for all URLs
+            for camera_url in self.camera_urls:
+                self.start_camera(camera_url)
+            
+            # Get all frames that are available
+            with self.frame_lock:
+                available_frames = {k: v for k, v in self.frames.items() if v is not None}
+            
+            if not available_frames:
+                return self._create_error_matrix(width, height, "Waiting for camera feeds...")
+            
+            # Calculate grid dimensions based on number of available frames
+            count = len(available_frames)
+            
+            # Calculate optimal grid dimensions
+            # Try to make it as square as possible while fitting the width/height ratio
+            aspect_ratio = width / height
+            cols = int(np.ceil(np.sqrt(count * aspect_ratio)))
+            rows = int(np.ceil(count / cols))
+            
+            # Calculate cell dimensions
+            cell_w = width // cols
+            cell_h = height // rows
+            
+            # Create a blank canvas
+            matrix = np.zeros((height, width, 3), dtype=np.uint8)
+            matrix[:] = (43, 43, 43)  # Dark gray background
+            
+            # Place frames in the grid
+            frame_list = list(available_frames.items())
+            for i, (camera_url, frame) in enumerate(frame_list):
+                if i >= cols * rows:
+                    break
+                    
+                # Calculate position
+                row = i // cols
+                col = i % cols
+                
+                try:
+                    # Resize frame to fit cell
+                    resized = cv2.resize(frame, (cell_w, cell_h))
+                    
+                    # Calculate position in matrix
+                    y_start = row * cell_h
+                    y_end = y_start + cell_h
+                    x_start = col * cell_w
+                    x_end = x_start + cell_w
+                    
+                    # Ensure we don't exceed matrix bounds
+                    if y_end <= height and x_end <= width:
+                        matrix[y_start:y_end, x_start:x_end] = resized
+                    
+                except Exception as e:
+                    print(f"Error processing frame for {camera_url}: {e}")
+                    continue
+            
+            return matrix
+            
+        except Exception as e:
+            print(f"Matrix view error: {e}")
+            return self._create_error_matrix(width, height, str(e))
+    
+    def _create_error_matrix(self, width, height, message):
+        """Create an error matrix with a message"""
+        matrix = np.zeros((height, width, 3), dtype=np.uint8)
+        matrix[:] = (43, 43, 43)  # Dark gray background
         
-        # Count cameras with actual frames
-        frames = self.get_all_camera_frames()
-        stats['cameras_with_frames'] = len([f for f in frames.values() if f is not None])
-        
-        return stats
+        cv2.putText(matrix, message, (30, 30), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        return matrix
 
 # Global camera manager instance
-camera_manager = CameraStreamManager()
+camera_manager = CameraManager()
+camera_manager.active = True  # Set active flag immediately
+camera_manager.load_camera_urls()  # Load URLs once at startup
 
 def calculate_optimal_grid_size(num_cameras):
     """
@@ -276,71 +449,13 @@ def calculate_optimal_grid_size(num_cameras):
         rows = math.ceil(num_cameras / cols)
         return cols, rows
 
-def create_matrix_view(ip_range_start=1, ip_range_end=50, max_cell_width=320, max_cell_height=240, max_display_cameras=2000):
-    """
-    Create a matrix view of camera streams from the IP list.
-    This function is completely non-blocking and returns immediately.
-    Only shows cameras that are connecting or have frames (excludes failed cameras).
-    
-    Args:
-        ip_range_start: Starting index in IP list (1-based)
-        ip_range_end: Ending index in IP list (1-based)
-        max_cell_width: Maximum width of each camera cell in pixels
-        max_cell_height: Maximum height of each camera cell in pixels
-        max_display_cameras: Maximum number of cameras to display at once
-    
-    Returns:
-        numpy.ndarray: Combined matrix image
-    """
+def create_matrix_view(width, height):
+    """Create matrix view of camera streams"""
     try:
-        # Get camera URLs from the range
-        all_camera_urls = get_ip_range(settings.ip_list_file, ip_range_start, min(ip_range_end, ip_range_start + max_display_cameras - 1))
-        
-        if not all_camera_urls:
-            return _create_placeholder_matrix(max_cell_width, max_cell_height, "No camera URLs found")
-        
-        # Start camera streams in background (completely non-blocking)
-        camera_manager.ensure_camera_streams_started(all_camera_urls)
-        
-        # Get only cameras that are connecting or active (exclude failed ones)
-        display_cameras = camera_manager.get_connecting_or_active_cameras(all_camera_urls)
-        
-        # If no cameras are connecting or active yet, show connection status
-        if not display_cameras:
-            stats = camera_manager.get_stream_stats()
-            message = f"Initializing {len(all_camera_urls)} cameras...\n"
-            message += f"Failed: {stats['failed_streams']}, "
-            message += f"Total attempted: {stats['total_attempted']}"
-            return _create_placeholder_matrix(max_cell_width, max_cell_height, message)
-        
-        # Get all current camera frames (non-blocking)
-        all_frames = camera_manager.get_all_camera_frames()
-        
-        # Filter frames for cameras we're displaying
-        active_frames = {}
-        for camera_url in display_cameras:
-            if camera_url in all_frames and all_frames[camera_url] is not None:
-                active_frames[camera_url] = all_frames[camera_url]
-        
-        # Calculate optimal cell size based on number of cameras
-        num_display_cameras = len(display_cameras)
-        cols, rows = calculate_optimal_grid_size(num_display_cameras)
-        
-        # Adjust cell size based on grid size to keep reasonable display size
-        if num_display_cameras > 100:
-            # Scale down cell size for large grids
-            scale_factor = max(0.3, 100.0 / num_display_cameras)
-            cell_width = max(80, int(max_cell_width * scale_factor))
-            cell_height = max(60, int(max_cell_height * scale_factor))
-        else:
-            cell_width = max_cell_width
-            cell_height = max_cell_height
-        
-        return _create_matrix_from_frames(active_frames, display_cameras, cell_width, cell_height, cols, rows)
-        
+        return camera_manager.create_matrix_view(width, height)
     except Exception as e:
         print(f"Error in create_matrix_view: {e}")
-        return _create_placeholder_matrix(max_cell_width, max_cell_height, f"Error: {str(e)}")
+        return camera_manager._create_error_matrix(width, height, str(e))
 
 def _create_placeholder_matrix(cell_width, cell_height, message):
     """Create a placeholder matrix with a message"""
@@ -483,11 +598,4 @@ def _create_matrix_from_frames(active_frames, display_cameras, cell_width, cell_
 
 def cleanup_camera_manager():
     """Clean up camera manager resources"""
-    global camera_manager
-    with camera_manager.initialization_lock:
-        camera_manager.active_streams.clear()
-        camera_manager.pending_streams.clear()
-        camera_manager.failed_streams.clear()
-        camera_manager.stream_status.clear()
-        camera_manager.connection_timestamps.clear()
-    print("Camera manager cleaned up")
+    camera_manager.stop_all_cameras()
