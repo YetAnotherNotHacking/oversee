@@ -5,3 +5,5 @@ requests
 psutil
 pyautogui
 pynput
+folium
+tkintermapview
