@@ -1,14 +1,104 @@
-# OverSee
-Build status (IDK):
-[![Build Executables](https://github.com/YetAnotherNotHacking/oversee/actions/workflows/build.yml/badge.svg)](https://github.com/YetAnotherNotHacking/oversee/actions/workflows/build.yml)
+# OVERSEE Worldwide Viewer
 
-OverSee is an interactive program written in Python and OpenCV that allows the user to look at several (about 900 at once) webcams all around the world.
-The script scrapes data from insecam.org into an ip list file, which the program then reads to show to the user.
-The script currently has a matrix view that shows all of the connected cameras all in one frame, as well as a list view that shows each camera individually (in a list obviously).
+A comprehensive GUI application for monitoring and managing IP cameras worldwide. The application provides multiple views including a map view, matrix view, and list view for efficient camera management.
 
-# Installation
-A github automation has been set up to automatically build on commits. Check the releases tab.
+## Features
+- **Map View**: Visualize camera locations on an interactive map
+  - Multiple map styles (OpenStreetMap, Google normal, Google satellite) using tkintermapview
+  - Clickable markers with camera information (in development)
+  - Real-time camera status updates
+  - Automatic geolocation of IP addresses (using ipinfo)
 
-# Progress:
-gotta love losing 6 hours of work from an AI edit that ruined all of the stuff you were working on as well as screwing over your git.
-![bruh](image.png)
+- **Matrix View**: Grid display of multiple camera feeds
+  - Real-time video streams
+  - Customizable grid layout (not much but sure)
+  - Camera status indicators
+
+- **List View**: Detailed camera management
+  - Comprehensive camera information
+  - Camera controls (move, favorite, open in browser)
+  - IP information lookup
+  - Camera status monitoring
+
+## Installation
+Binaries coming soon. They will be located somewhere on silverflag.net. I'll update this with the link when it is ready.
+
+## Function
+1. The application will:
+   - Initialize the IP coordinates database
+   - Load camera information
+   - Start the main GUI
+
+2. Using the interface:
+   - **Map View**: View and interact with camera locations
+   - **Matrix View**: Monitor multiple camera feeds
+   - **List View**: Manage individual cameras
+
+## Configuration
+
+### Settings File
+The `settings.py` file contains important configuration options:
+- IP list file location
+- Database paths
+- Map tile server settings
+- Camera stream parameters
+
+### IP List Format
+The IP list file should contain one IP address per line:
+```
+192.168.1.1
+10.0.0.1/video
+camera.example.com:8080
+```
+
+## Project Structure
+
+```
+oversee-1/
+├── src/
+│   ├── gui/
+│   │   ├── maingui.py          # Main GUI implementation
+│   │   ├── settingsgui.py      # Settings window
+│   │   ├── focusedmapgui.py    # Focused map view
+│   │   └── rendermatrix.py     # Matrix view rendering
+│   ├── initdata/
+│   │   └── getiplistcoordinates.py  # IP coordinate processing
+│   └── utility/
+│       ├── ip2loc.py           # IP geolocation utilities
+│       └── iplist.py           # IP list handling
+├── data/
+│   ├── ip_info.db             # IP coordinate database
+│   └── cameras.db             # Camera status database
+├── main.py                    # Application entry point
+└── requirements.txt           # Python dependencies
+```
+## Development
+
+### Adding New Features
+1. Fork the repository
+2. Create a feature branch
+3. Implement your changes
+4. Submit a pull request
+
+### Code Style
+- Follow PEP 8 guidelines
+- Use meaningful variable names
+- Add comments for complex logic
+- Update documentation as needed
+
+## Contributing
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+None. Steal it and put sprinkles on it.
+
+## Acknowledgments
+- IP geolocation data provided by ipinfo.io
+- Map tiles from OpenStreetMap and Google Maps
+- All contributors and users of the project
+
+## Support
+For support, please:
+1. Check the documentation (there isn't any yet but there will be)
+2. Search existing issues (In GitHub)
+3. Create a new issue if needed (Also In GitHub)
