@@ -1,0 +1,8 @@
+{
+    "ip_list_file": "streamables.txt",
+    "tile_server": "google",
+    "geo_mode": "scrape",
+    "online_color": "#00ff00",
+    "offline_color": "#ff00ff",
+    "favorites_file": ""
+}
