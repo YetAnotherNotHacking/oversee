@@ -1,10 +1,11 @@
+# Who else HATES applescript?
 name: Build Binaries
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:  # allows manual triggering
+  workflow_dispatch:
 
 jobs:
   build:
@@ -30,20 +31,71 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller --onefile --windowed src/main.py --name SilverFlag-${{ matrix.os }}
-          
-      - name: Set build timestamp (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: echo "DATE_TAG=$(date +'%Y-%m-%d-%H%M')" >> $GITHUB_ENV
-      
-      - name: Set build timestamp (Windows)
-        if: runner.os == 'Windows'
-        run: | 
-          $dt = Get-Date -Format "yyyy-MM-dd-HHmm"
-          echo "DATE_TAG=$dt" >> $env:GITHUB_ENV
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            pyinstaller --windowed src/main.py --name SilverFlag --distpath dist
+          else
+            pyinstaller --onefile --windowed src/main.py --name SilverFlag-${{ matrix.os }} --distpath dist
+          fi
+
+      - name: Create DMG (macOS only)
+        if: matrix.os == 'macos-latest'
+        run: |
+          APP_NAME=SilverFlag
+          APP_PATH=dist/${APP_NAME}.app
+          DMG_NAME=${APP_NAME}.dmg
+          VOL_NAME="Install ${APP_NAME}"
+          DMG_TEMP=tmp.dmg
+          STAGING_DIR=dist/dmg-staging
+          BACKGROUND_PATH=$GITHUB_WORKSPACE/assets/dmg-background.png
+
+          mkdir -p "$STAGING_DIR/.background"
+          cp -R "$APP_PATH" "$STAGING_DIR/"
+          ln -s /Applications "$STAGING_DIR/Applications"
+          cp "$BACKGROUND_PATH" "$STAGING_DIR/.background/background.png"
+
+          hdiutil create -srcfolder "$STAGING_DIR" -volname "$VOL_NAME" -fs HFS+ -fsargs "-c c=64,a=16,e=16" -format UDRW -ov "$DMG_TEMP"
+          MOUNT_DIR=$(hdiutil attach -nobrowse -noverify -mountpoint /Volumes/"$VOL_NAME" "$DMG_TEMP" | grep Volumes | awk '{print $3}')
+
+          sleep 2
+
+          osascript <<EOF
+            tell application "Finder"
+              tell disk "$VOL_NAME"
+                open
+                set current view of container window to icon view
+                set toolbar visible of container window to false
+                set statusbar visible of container window to false
+                set the bounds of container window to {100, 100, 1000, 700}
+                set viewOptions to the icon view options of container window
+                set arrangement of viewOptions to not arranged
+                set icon size of viewOptions to 128
+                set background picture of viewOptions to file ".background:background.png"
+
+                set position of item "${APP_NAME}.app" to {200, 300}
+                set position of item "Applications" to {600, 300}
+                close
+                open
+                update without registering applications
+                delay 2
+              end tell
+            end tell
+EOF
+
+          hdiutil detach "$MOUNT_DIR"
+          hdiutil convert "$DMG_TEMP" -format UDZO -imagekey zlib-level=9 -o "dist/${DMG_NAME}"
+          rm "$DMG_TEMP"
+          rm -rf "$STAGING_DIR"
+
+      - name: Set build timestamp
+        run: |
+          echo "DATE_TAG=$(date +'%Y-%m-%d-%H%M')" >> $GITHUB_ENV
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: SilverFlag-${{ matrix.os }}
-          path: dist/
+          path: |
+            dist/SilverFlag.dmg
+            dist/SilverFlag-${{ matrix.os }}
+            dist/SilverFlag.app
+            dist/*
