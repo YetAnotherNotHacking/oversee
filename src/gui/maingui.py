@@ -20,6 +20,7 @@ from gui.settingsgui import SettingsWindow
 from gui.focusedmapgui import FocusedMapWindow
 from concurrent.futures import ThreadPoolExecutor
 import queue
+import requests
 
 ip_list_file = settings.ip_list_file
 
@@ -114,7 +115,7 @@ class MainGUI:
         
     def init_database(self):
         """Initialize SQLite database for camera status tracking"""
-        db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'cameras.db')
+        db_path = settings.cameras_db
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         
         # Create initial connection to set up database
@@ -138,8 +139,7 @@ class MainGUI:
 
     def get_thread_db_connection(self):
         """Create a new database connection for the current thread"""
-        db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'cameras.db')
-        return sqlite3.connect(db_path, check_same_thread=False)
+        return sqlite3.connect(settings.cameras_db, check_same_thread=False)
 
     def update_camera_status(self, ip, status, resolution=None, stream_type=None, endpoint=None, location=None):
         """Update camera status in database"""
@@ -249,7 +249,7 @@ class MainGUI:
             print(f"Error checking camera status: {e}")
             self.update_camera_status(ip=ip, status="Error")
             self.tree.after(0, lambda: self.update_tree_item(item_id, ip, "Error"))
-
+        
     def setup_gui(self):
         # Create menu bar
         self.create_menu_bar()
@@ -283,14 +283,19 @@ class MainGUI:
         settings_menu.add_command(label="Network Config", command=self.open_network_config)
         settings_menu.add_separator()
         settings_menu.add_command(label="About", command=self.show_about)
+
+        # Advanced dropdown
+        advanced_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Advanced", menu=advanced_menu)
+        advanced_menu.add_command(label="Reinit all", command=self.reinit_all)
     
     def open_preferences(self):
         """Open the preferences window"""
         SettingsWindow(self.root)
-
+    
     def open_network_config(self):
         messagebox.showinfo("Settings", "Network configuration dialog would open here")
-
+    
     def show_about(self):
         messagebox.showinfo("About", "Main Application v1.0\nA comprehensive GUI application")
 
@@ -303,35 +308,6 @@ class MainGUI:
         
         try:
             from tkintermapview import TkinterMapView
-            import requests
-            import json
-            from utility.iplist import get_ip_range
-            import sqlite3
-            import os
-            import threading
-            
-            # Initialize IP info database
-            def init_ip_info_db():
-                db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'ip_info.db')
-                os.makedirs(os.path.dirname(db_path), exist_ok=True)
-                
-                conn = sqlite3.connect(db_path)
-                cursor = conn.cursor()
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS ip_info (
-                        ip TEXT PRIMARY KEY,
-                        lat REAL,
-                        lon REAL,
-                        city TEXT,
-                        country TEXT,
-                        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-                conn.commit()
-                conn.close()
-                return db_path
-            
-            self.ip_info_db_path = init_ip_info_db()
             
             # Create the map widget
             map_widget = TkinterMapView(map_frame, width=800, height=600, corner_radius=0)
@@ -341,181 +317,123 @@ class MainGUI:
             map_widget.set_position(0, 0)
             map_widget.set_zoom(2)
             
-            # Add a marker at (0,0)
-            marker = map_widget.set_marker(0, 0, text="Center of the World")
-            
-            # Add some controls
-            control_frame = ttk.Frame(map_frame)
-            control_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
-            
             # Add map style selector
-            ttk.Label(control_frame, text="Map Style:").grid(row=0, column=0, padx=5)
-            map_style_var = tk.StringVar(value=getattr(settings, 'tile_server', 'OpenStreetMap'))
-            map_style_combo = ttk.Combobox(control_frame, textvariable=map_style_var, 
-                                         values=["OpenStreetMap", "Google normal", "Google satellite"],
-                                         state='readonly', width=15)
-            map_style_combo.grid(row=0, column=1, padx=5)
+            control_frame = ttk.Frame(map_frame)
+            control_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
+            
+            style_label = ttk.Label(control_frame, text="Map Style:")
+            style_label.grid(row=0, column=0, padx=5, pady=5)
+            
+            style_var = tk.StringVar(value="OpenStreetMap")
+            style_combo = ttk.Combobox(control_frame, textvariable=style_var, state="readonly")
+            style_combo['values'] = ("OpenStreetMap", "Google normal", "Google satellite")
+            style_combo.grid(row=0, column=1, padx=5, pady=5)
             
             def change_map_style(event=None):
-                new_style = map_style_var.get()
-                if new_style == "OpenStreetMap":
-                    map_widget.set_tile_server("https://a.tile.openstreetmap.org/{z}/{x}/{y}.png")
-                elif new_style == "Google normal":
+                style = style_var.get()
+                if style == "OpenStreetMap":
                     map_widget.set_tile_server("https://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}&s=Ga", max_zoom=22)
-                elif new_style == "Google satellite":
+                elif style == "Google normal":
+                    map_widget.set_tile_server("https://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}&s=Ga", max_zoom=22)
+                elif style == "Google satellite":
                     map_widget.set_tile_server("https://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}&s=Ga", max_zoom=22)
-                # Update settings
-                settings.tile_server = new_style
             
-            map_style_combo.bind('<<ComboboxSelected>>', change_map_style)
+            style_combo.bind('<<ComboboxSelected>>', change_map_style)
             
-            # Add zoom controls
-            ttk.Button(control_frame, text="Zoom In", 
-                      command=lambda: map_widget.set_zoom(map_widget.zoom + 1)).grid(row=0, column=2, padx=5)
-            ttk.Button(control_frame, text="Zoom Out", 
-                      command=lambda: map_widget.set_zoom(map_widget.zoom - 1)).grid(row=0, column=3, padx=5)
+            # Add marker count control
+            count_frame = ttk.Frame(control_frame)
+            count_frame.grid(row=1, column=0, columnspan=2, padx=5, pady=5)
             
-            # Add a button to reset view
-            ttk.Button(control_frame, text="Reset View", 
-                      command=lambda: map_widget.set_position(0, 0)).grid(row=0, column=4, padx=5)
+            ttk.Label(count_frame, text="Markers to load:").pack(side="left", padx=5)
+            count_var = tk.StringVar(value="100")
+            count_entry = ttk.Entry(count_frame, textvariable=count_var, width=10)
+            count_entry.pack(side="left", padx=5)
             
-            # Add process data button and progress bar
-            process_frame = ttk.Frame(map_frame)
-            process_frame.grid(row=2, column=0, sticky="ew", padx=10, pady=5)
+            # Add progress bar
+            progress_frame = ttk.Frame(map_frame)
+            progress_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
             
             self.progress_var = tk.DoubleVar()
-            self.progress_bar = ttk.Progressbar(process_frame, variable=self.progress_var, maximum=100)
-            self.progress_bar.grid(row=0, column=0, sticky="ew", padx=(0, 5))
+            progress_bar = ttk.Progressbar(progress_frame, variable=self.progress_var, maximum=100)
+            progress_bar.pack(side="left", fill="x", expand=True)
             
             # Add counter label
-            self.counter_label = ttk.Label(process_frame, text="0/0")
-            self.counter_label.grid(row=0, column=1, padx=5)
+            self.counter_label = ttk.Label(progress_frame, text="0/0")
+            self.counter_label.pack(side="right", padx=5)
             
-            def get_cached_ip_info(ip):
-                """Get IP info from database"""
+            def load_markers_thread():
+                """Load markers in a separate thread"""
                 try:
-                    conn = sqlite3.connect(self.ip_info_db_path)
-                    cursor = conn.cursor()
-                    cursor.execute('SELECT lat, lon, city, country FROM ip_info WHERE ip = ?', (ip,))
-                    result = cursor.fetchone()
-                    conn.close()
+                    # Clear existing markers
+                    map_widget.delete_all_marker()
                     
-                    if result:
-                        return {
-                            'ip': ip,
-                            'lat': result[0],
-                            'lon': result[1],
-                            'city': result[2],
-                            'country': result[3],
-                            'base_ip': ip
-                        }
-                except Exception as e:
-                    print(f"Error getting cached IP info: {e}")
-                return None
-            
-            def save_ip_info(data):
-                """Save IP info to database"""
-                try:
-                    conn = sqlite3.connect(self.ip_info_db_path)
-                    cursor = conn.cursor()
-                    cursor.execute('''
-                        INSERT OR REPLACE INTO ip_info (ip, lat, lon, city, country, last_updated)
-                        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                    ''', (data['ip'], data['lat'], data['lon'], data['city'], data['country']))
-                    conn.commit()
-                    conn.close()
-                except Exception as e:
-                    print(f"Error saving IP info: {e}")
-            
-            def add_marker_to_map(result):
-                """Add a marker to the map (called from main thread)"""
-                if result:
-                    # Create marker with IP info
-                    marker_text = f"{result['base_ip']}\n{result['city']}, {result['country']}"
-                    marker = map_widget.set_marker(result['lat'], result['lon'], text=marker_text)
-                    
-                    # Add click event using standard Tkinter binding
-                    def on_marker_click(event, ip=result['ip']):
-                        # Switch to list view and select the IP
-                        self.notebook.select(2)  # Switch to list view tab
-                        for item in self.tree.get_children():
-                            if self.tree.item(item)['values'][0] == ip:
-                                self.tree.selection_set(item)
-                                self.tree.see(item)
-                                break
-                    
-                    # Bind click event to the marker's canvas item
-                    if hasattr(marker, 'canvas_item'):
-                        map_widget.canvas.tag_bind(marker.canvas_item, '<Button-1>', on_marker_click)
-            
-            def process_ip_data():
-                # Clear existing markers
-                map_widget.delete_all_marker()
-                
-                # Get IP list
-                ip_list = get_ip_range(settings.ip_list_file, 1, self.total_ips)
-                total_ips = len(ip_list)
-                processed_count = 0
-                
-                # Reset progress
-                self.progress_var.set(0)
-                self.counter_label.config(text=f"0/{total_ips}")
-                
-                def process_next_ip(index=0):
-                    if index >= len(ip_list):
-                        return
-                    
-                    ip = ip_list[index]
+                    # Get number of markers to load
                     try:
-                        # Extract base IP without endpoint or port
-                        base_ip = ip.split('/')[0] if '/' in ip else ip
-                        base_ip = base_ip.split(':')[0] if ':' in base_ip else base_ip
+                        num_markers = int(count_var.get())
+                    except ValueError:
+                        num_markers = 100
+                    
+                    # Connect to database
+                    conn = sqlite3.connect(settings.ip_info_db)
+                    cursor = conn.cursor()
+                    cursor.execute('SELECT ip, lat, lon, city, country FROM ip_info LIMIT ?', (num_markers,))
+                    results = cursor.fetchall()
+                    conn.close()
+                    
+                    total_ips = len(results)
+                    processed = 0
+                    
+                    # Reset progress
+                    self.progress_var.set(0)
+                    self.counter_label.config(text=f"0/{total_ips}")
+                    
+                    for ip, lat, lon, city, country in results:
+                        # Create marker with IP info
+                        marker_text = f"{ip}\n{city}, {country}"
                         
-                        # Check cache first
-                        result = get_cached_ip_info(base_ip)
+                        # Add marker in main thread
+                        def add_marker(ip=ip, lat=lat, lon=lon, text=marker_text):
+                            marker = map_widget.set_marker(lat, lon, text=text)
+                            
+                            # Add click event
+                            def on_marker_click(event, ip=ip):
+                                # Switch to list view and select the IP
+                                self.notebook.select(2)  # Switch to list view tab
+                                for item in self.tree.get_children():
+                                    if self.tree.item(item)['values'][0] == ip:
+                                        self.tree.selection_set(item)
+                                        self.tree.see(item)
+                                        break
+                            
+                            # Bind click event to the marker's canvas item
+                            if hasattr(marker, 'canvas_item'):
+                                map_widget.canvas.tag_bind(marker.canvas_item, '<Button-1>', on_marker_click)
                         
-                        if not result:
-                            # Get IP info from API
-                            response = requests.get(f"https://ipinfo.io/{base_ip}")
-                            if response.status_code == 200:
-                                data = response.json()
-                                if 'loc' in data:
-                                    lat, lon = map(float, data['loc'].split(','))
-                                    result = {
-                                        'ip': base_ip,
-                                        'lat': lat,
-                                        'lon': lon,
-                                        'city': data.get('city', ''),
-                                        'country': data.get('country', ''),
-                                        'base_ip': base_ip
-                                    }
-                                    # Save to database
-                                    save_ip_info(result)
-                        
-                        if result:
-                            # Add marker in main thread
-                            self.root.after(0, lambda r=result: add_marker_to_map(r))
+                        # Schedule marker addition in main thread
+                        self.root.after(0, lambda: add_marker())
                         
                         # Update progress
-                        nonlocal processed_count
-                        processed_count += 1
-                        progress = (processed_count / total_ips) * 100
-                        self.root.after(0, lambda: self.progress_var.set(progress))
-                        self.root.after(0, lambda: self.counter_label.config(text=f"{processed_count}/{total_ips}"))
+                        processed += 1
+                        progress = (processed / total_ips) * 100
+                        self.progress_var.set(progress)
+                        self.counter_label.config(text=f"{processed}/{total_ips}")
                         
-                        # Process next IP with a small delay to keep GUI responsive
-                        self.root.after(10, lambda: process_next_ip(index + 1))
-                        
-                    except Exception as e:
-                        print(f"Error processing IP {ip}: {e}")
-                        # Continue with next IP
-                        self.root.after(10, lambda: process_next_ip(index + 1))
-                
-                # Start processing in a separate thread
-                self.thread_pool.submit(process_next_ip)
+                        # Small delay to keep GUI responsive
+                        time.sleep(0.01)
+                    
+                    print(f"Loaded {processed} markers from database")
+                    
+                except Exception as e:
+                    print(f"Error loading markers: {e}")
             
-            ttk.Button(process_frame, text="Process IP Data", 
-                      command=process_ip_data).grid(row=0, column=2, padx=5)
+            def start_loading():
+                """Start loading markers in a separate thread"""
+                # Start loading thread
+                threading.Thread(target=load_markers_thread, daemon=True).start()
+            
+            # Add load markers button
+            load_button = ttk.Button(control_frame, text="Load Markers", command=start_loading)
+            load_button.grid(row=2, column=0, columnspan=2, padx=5, pady=5)
             
             # Store the map widget for later use
             self.map_widget = map_widget
@@ -523,8 +441,8 @@ class MainGUI:
             # Set initial map style
             change_map_style()
             
-            # Start processing on startup
-            self.root.after(1000, process_ip_data)  # Start after 1 second to let GUI initialize
+            # Load initial markers after a delay
+            self.root.after(1000, start_loading)
             
         except ImportError:
             # If tkintermapview is not installed, show an error message
@@ -535,7 +453,7 @@ class MainGUI:
                 foreground='red'
             )
             error_label.grid(row=0, column=0, padx=10, pady=10)
-
+        
     def create_matrix_view(self):
         matrix_frame = ttk.Frame(self.notebook)
         self.notebook.add(matrix_frame, text="Matrix View")
@@ -550,7 +468,7 @@ class MainGUI:
         
         # Start matrix update thread
         self.update_matrix_display()
-
+            
     def update_matrix_display(self):
         """Update the matrix display with current camera streams"""
         # Only update if matrix view is active
@@ -592,7 +510,7 @@ class MainGUI:
             self.matrix_canvas.delete("all")
             self.matrix_canvas.create_text(
                 canvas_width//2, canvas_height//2,
-                text=f"Display error: {str(e)[:50]}...",
+                                            text=f"Display error: {str(e)[:50]}...", 
                 fill="red",
                 font=('Arial', 12),
                 justify="center"
@@ -600,7 +518,7 @@ class MainGUI:
         
         # Schedule next update
         self.root.after(2000, self.update_matrix_display)
-
+        
     def cleanup_on_close(self):
         """Clean up resources when closing the application"""
         try:
@@ -725,7 +643,7 @@ class MainGUI:
         
         self.prop_resolution = ttk.Label(self.properties_frame, text="Resolution: -")
         self.prop_resolution.grid(row=3, column=0, sticky="w", pady=2)
-
+        
     def on_tab_change(self, event):
         """Handle tab changes to manage active views and threads"""
         current_tab = self.notebook.select()
@@ -912,16 +830,16 @@ class MainGUI:
                             self.image_label.after(0, lambda: self.image_label.config(
                                 image='', text="Waiting for camera feed..."
                             ))
-                            
-                    time.sleep(0.1)  # Limit frame rate
                     
+                    time.sleep(0.1)  # Limit frame rate
+                
                 except Exception as e:
                     print(f"Error in preview loop: {str(e)}")  # Debug log
                     self.image_label.after(0, lambda: self.image_label.config(
                         image='', text=f"Preview error: {str(e)}"
                     ))
                     time.sleep(1)  # Wait before retrying
-                
+        
         except Exception as e:
             print(f"Fatal error in camera preview: {str(e)}")  # Debug log
             self.image_label.after(0, lambda: self.image_label.config(
@@ -939,7 +857,7 @@ class MainGUI:
             self.image_label.image = photo  # Keep a reference to prevent garbage collection
         except tk.TclError:
             pass
-
+        
     def create_status_bar(self):
         status_frame = ttk.Frame(self.root, relief=tk.SUNKEN, borderwidth=1)
         status_frame.grid(row=2, column=0, sticky="ew")
@@ -1066,7 +984,6 @@ class MainGUI:
                 
                 # Add additional information from ipinfo.io
                 try:
-                    import requests
                     response = requests.get(f"https://ipinfo.io/{base_ip}/json")
                     if response.status_code == 200:
                         data = response.json()
@@ -1144,6 +1061,21 @@ class MainGUI:
         except Exception as e:
             print(f"Error counting IPs: {e}")
             return 100  # Fallback to default value
+
+    def reinit_all(self):
+        import shutil
+        import sys
+        data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
+        answer = messagebox.askyesno("Reinitialize All Data", "This will delete all data and redownload everything. Are you sure?")
+        if answer:
+            try:
+                if os.path.exists(data_dir):
+                    shutil.rmtree(data_dir)
+                messagebox.showinfo("Restarting", "The application will now restart to reinitialize data.")
+                python = sys.executable
+                os.execl(python, python, *sys.argv)
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to reinitialize: {e}")
 
 
 def runmaingui():
