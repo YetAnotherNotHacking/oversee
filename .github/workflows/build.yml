@@ -203,32 +203,68 @@ jobs:
           hdiutil create -srcfolder "$STAGING_DIR" -volname "$VOL_NAME" -fs HFS+ \
             -fsargs "-c c=64,a=16,e=16" -format UDRW -ov "$DMG_TEMP"
 
-          # Mount the DMG and get the mount point more reliably
-          MOUNT_OUTPUT=$(hdiutil attach -readwrite -nobrowse -noverify "$DMG_TEMP" 2>/dev/null)
-          MOUNT_DIR=$(echo "$MOUNT_OUTPUT" | grep -E '^/dev/' | tail -1 | awk '{print $3}')
+          # Mount the DMG with a specific mount point
+          MOUNT_DIR="/Volumes/$VOL_NAME"
+          echo "Attempting to mount at: $MOUNT_DIR"
           
-          echo "Mount directory: $MOUNT_DIR"
-          
-          # Give it a moment to mount and verify it mounted
-          sleep 3
+          # Ensure mount point doesn't exist
           if [ -d "$MOUNT_DIR" ]; then
+            hdiutil detach "$MOUNT_DIR" -force || true
+            sleep 1
+          fi
+          
+          # Mount with explicit mount point
+          hdiutil attach -readwrite -nobrowse -noverify -mountpoint "$MOUNT_DIR" "$DMG_TEMP"
+          
+          # Verify mount succeeded
+          if [ -d "$MOUNT_DIR" ] && [ -d "$MOUNT_DIR/${APP_NAME}.app" ]; then
             echo "DMG mounted successfully at $MOUNT_DIR"
             
             # Run the AppleScript
             osascript dmg_setup.applescript || echo "AppleScript failed, continuing..."
             
             # Give Finder time to process
-            sleep 2
+            sleep 3
             
-            # Unmount
-            hdiutil detach "$MOUNT_DIR" || echo "Detach failed, trying force detach..."
-            hdiutil detach "$MOUNT_DIR" -force || echo "Force detach also failed, continuing..."
+            # Ensure all Finder operations are complete
+            sync
+            
+            # Force unmount with retry
+            for i in {1..5}; do
+              if hdiutil detach "$MOUNT_DIR" 2>/dev/null; then
+                echo "Successfully detached DMG"
+                break
+              elif [ $i -eq 5 ]; then
+                echo "Force detaching DMG"
+                hdiutil detach "$MOUNT_DIR" -force || true
+                sleep 2
+                break
+              else
+                echo "Detach attempt $i failed, retrying..."
+                sleep 2
+              fi
+            done
           else
-            echo "Failed to mount DMG properly, skipping AppleScript"
+            echo "Failed to mount DMG properly"
           fi
 
-          # Convert to compressed DMG
-          hdiutil convert "$DMG_TEMP" -format UDZO -imagekey zlib-level=9 -o "dist/${DMG_NAME}"
+          # Wait a moment before conversion
+          sleep 2
+
+          # Convert to compressed DMG with retry
+          for i in {1..3}; do
+            if hdiutil convert "$DMG_TEMP" -format UDZO -imagekey zlib-level=9 -o "dist/${DMG_NAME}" 2>/dev/null; then
+              echo "DMG conversion successful"
+              break
+            elif [ $i -eq 3 ]; then
+              echo "DMG conversion failed after 3 attempts, creating simple DMG"
+              # Fallback: create a simple compressed DMG directly
+              hdiutil create -srcfolder "$STAGING_DIR" -volname "$VOL_NAME" -format UDZO -o "dist/${DMG_NAME}"
+            else
+              echo "DMG conversion attempt $i failed, retrying..."
+              sleep 3
+            fi
+          done
           
           # Clean up
           rm -f "$DMG_TEMP"
