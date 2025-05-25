@@ -45,6 +45,7 @@ The `settings.py` file contains important configuration options:
 
 ### IP List Format
 The IP list file should contain one IP address per line:
+The list is automatically scraped from Insecam currently.
 ```
 192.168.1.1
 10.0.0.1/video
@@ -54,23 +55,38 @@ camera.example.com:8080
 ## Project Structure
 
 ```
-oversee-1/
+oversee-main/
+├── cam_movement_reversing.md         # Trying to add functionality to the move feature
+├── prepforcommit.sh                  # OLD DO NOT USE IT
+├── .gitignore                        # ... Obv its git ignore?
 ├── src/
-│   ├── gui/
-│   │   ├── maingui.py          # Main GUI implementation
-│   │   ├── settingsgui.py      # Settings window
-│   │   ├── focusedmapgui.py    # Focused map view
-│   │   └── rendermatrix.py     # Matrix view rendering
-│   ├── initdata/
-│   │   └── getiplistcoordinates.py  # IP coordinate processing
-│   └── utility/
-│       ├── ip2loc.py           # IP geolocation utilities
-│       └── iplist.py           # IP list handling
-├── data/
-│   ├── ip_info.db             # IP coordinate database
-│   └── cameras.db             # Camera status database
-├── main.py                    # Application entry point
-└── requirements.txt           # Python dependencies
+│   ├── gui/                          # All GUI related code
+│   │   ├── maingui.py                # Main GUI implementation
+│   │   ├── settingsgui.py            # Settings window
+│   │   ├── initgui.py                # Loading menu
+│   │   ├── movementgui.py            # Camera movement remote
+│   │   ├── focusedmapgui.py          # Focused map view "view on map" in list view
+│   │   └── rendermatrix.py           # Matrix view rendering
+│   ├── backend/                      # Not really backend, just camera management stuff
+│   │   ├── cameradown.py             # All things that are camera > user
+│   │   ├── cameraup.py               # All things that are user > camera
+│   ├── initdata/                     # All of the prelaunch prep ran by initgui
+│   │   ├── getiplistcoordinates.py   # IP coordinate processing
+│   │   ├── formatscrapeddata.py      # Make the scraped ip list compliant with the program
+│   │   ├── getiplist.py              # Threaded insecam scraper
+│   │   ├── headinit.py               # Deprecated and unused function for init (now in initgui)
+│   │   ├── validateiplist.py         # Remove IPs that don't respond (intentionally broken)
+│   │   └── ip2locdownload.py         # Download less precise backup IP2Loc databases
+│   └── utility/                      # Misc escentially.
+│       ├── ip2loc.py                 # IP geolocation utilities
+│       ├── camera_manager.py         # I think unused (maybe) function for managing timed out streams
+│       └── iplist.py                 # IP list handling (e.g. read range)
+├── data/                             # Data that the program gets when it runs
+│   ├── ip_info.db                    # IP coordinate database (stump to grow is at [here](https://silverflag.net/oversee/ip_info.raw))
+│   ├── other                         # General backup ip2loc database files
+│   └── cameras.db                    # Camera status database (Online, Offline, Unkown)
+├── main.py                           # Application entry point (runs init and everything)
+└── requirements.txt                  # Python dependencies
 ```
 ## Development
 
