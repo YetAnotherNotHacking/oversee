@@ -1,12 +1,17 @@
 # All of the configurations from the program
 
 import os
+import sys
+from pathlib import Path
 
-# Get the base directory (src folder)
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# Data directory
-DATA_DIR = os.path.join(BASE_DIR, 'data')
+# Get the appropriate data directory based on platform
+if sys.platform == 'darwin':  # macOS
+    # Use /Users/Shared/OVERSEE for system-wide shared data
+    DATA_DIR = '/Users/Shared/OVERSEE'
+else:
+    # Get the base directory (src folder)
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    DATA_DIR = os.path.join(BASE_DIR, 'data')
 
 # Create data directory if it doesn't exist
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -29,6 +34,6 @@ DB_ZIP = "IP2LOCATION-LITE-DB1.CSV.ZIP"
 DB_CSV = "IP2LOCATION-LITE-DB1.CSV"
 
 # Insecam configs
-insecam_output_file="stream_links.txt" # Raw output (needs processing to be streamed)
-base_url = "http://www.insecam.org/en/byrating/" # Endpoint to scrape by
-total_pages = 448 # Total number of pages on insecam, may require manual updating (I might implement autoupdating for this later)
+insecam_output_file = os.path.join(DATA_DIR, "stream_links.txt")  # Raw output (needs processing to be streamed)
+base_url = "http://www.insecam.org/en/byrating/"  # Endpoint to scrape by
+total_pages = 448  # Total number of pages on insecam, may require manual updating (I might implement autoupdating for this later)
