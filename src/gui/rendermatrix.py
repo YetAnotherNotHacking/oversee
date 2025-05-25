@@ -132,39 +132,32 @@ class CameraManager:
         return url
     
     def load_camera_urls(self):
-        """Load camera URLs from file once and cache them"""
-        if not self.camera_urls:  # Only load if not already loaded
-            try:
-                # Get the correct path to the IP list file
-                ip_list_path = os.path.join(os.path.dirname(__file__), '..', '..', 'rawips.txt')
-                if not os.path.exists(ip_list_path):
-                    ip_list_path = os.path.join(os.getcwd(), 'rawips.txt')
-                
-                print(f"Loading camera URLs from: {ip_list_path}")
-                
-                # Read all URLs from file
-                with open(ip_list_path, 'r') as f:
-                    urls = [line.strip() for line in f if line.strip()]
-                
-                # Format URLs properly
-                formatted_urls = []
-                for url in urls:
-                    if '/' in url:
-                        base_ip, endpoint = url.split('/', 1)
-                        formatted_url = f"http://{base_ip}/{endpoint}"
-                    else:
-                        formatted_url = f"http://{url}/video"
-                    formatted_urls.append(formatted_url)
-                
-                with self.url_lock:
-                    self.camera_urls = formatted_urls
-                print(f"Loaded {len(self.camera_urls)} camera URLs")
-                
-            except Exception as e:
-                    print(f"Error loading camera URLs: {e}")
-                    return []
-        
-        return self.camera_urls
+        """Load camera URLs from rawips.txt"""
+        try:
+            # Read from rawips.txt
+            with open(settings.ip_list_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        # Format the URL properly
+                        if not line.startswith(('http://', 'rtsp://')):
+                            if '/' in line:
+                                base_ip, endpoint = line.split('/', 1)
+                                camera_url = f"http://{base_ip}/{endpoint}"
+                            else:
+                                camera_url = f"http://{line}/video"
+                        else:
+                            camera_url = line
+                        self.camera_urls.append(camera_url)
+            
+            # Remove duplicates while preserving order
+            self.camera_urls = list(dict.fromkeys(self.camera_urls))
+            
+            print(f"Loaded {len(self.camera_urls)} unique camera URLs")
+            
+        except Exception as e:
+            print(f"Error loading camera URLs: {e}")
+            self.camera_urls = []
     
     def read_stream(self, camera_url):
         """Read camera stream and update frames dictionary"""
