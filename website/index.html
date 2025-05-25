@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OVERSEE Worldwide Viewer | SilverFlag</title>
+    <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://silverflag.net/assets/script.js"></script>
+    <style>
+        p {
+            color: #ffffff;
+            font-family: "Exo 2";
+        }
+        
+        body {
+            font-family: 'Exo 2', sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #000000;
+        }
+        
+        .container {
+            overflow: hidden;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: rgb(44, 44, 44);
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #ff0000;
+            text-align: center;
+            margin-bottom: 5px;
+        }
+        
+        h2 {
+            color: #ff0000;
+            text-align: left;
+            margin-bottom: 10px;
+        }
+        
+        h3 {
+            color: #ff0000;
+            text-align: left;
+            margin-bottom: 15px;
+        }
+        
+        .nav-buttons {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .nav-button {
+            background-color: #4b4b4b;
+            padding: 5px 10px;
+            border-radius: 3px;
+            text-decoration: none;
+            color: rgb(255, 255, 255);
+            font-size: 14px;
+        }
+        
+        .nav-button:hover {
+            color: #ff7a7a;
+            background-color: #3d3d3d;
+        }
+        
+        .section {
+            margin-top: 20px;
+        }
+        
+        a {
+            color: rgb(255, 0, 0);
+            text-decoration: underline;
+            padding: 2px;
+        }
+        
+        a:hover {
+            color: #ff7a7a;
+        }
+        
+        /* Image Carousel Styles */
+        .carousel-container {
+            position: relative;
+            max-width: 100%;
+            margin: 20px 0;
+            background-color: #2c2c2c;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        
+        .carousel-wrapper {
+            position: relative;
+            width: 100%;
+            height: 400px;
+            overflow: hidden;
+        }
+        
+        .carousel-slide {
+            display: none;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .carousel-slide.active {
+            display: block;
+        }
+        
+        .carousel-slide img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background-color: #1a1a1a;
+        }
+        
+        .carousel-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background-color: rgba(255, 0, 0, 0.7);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            cursor: pointer;
+            font-size: 18px;
+            border-radius: 3px;
+            transition: background-color 0.3s;
+        }
+        
+        .carousel-nav:hover {
+            background-color: rgba(255, 0, 0, 0.9);
+        }
+        
+        .carousel-prev {
+            left: 10px;
+        }
+        
+        .carousel-next {
+            right: 10px;
+        }
+        
+        .carousel-indicators {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+            padding: 10px;
+            background-color: #2c2c2c;
+        }
+        
+        .carousel-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #666;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .carousel-dot.active {
+            background-color: #ff0000;
+        }
+        
+        /* Feature lists */
+        .feature-section {
+            margin: 30px 0;
+        }
+        
+        .feature-category {
+            margin-bottom: 25px;
+        }
+        
+        .feature-category h3 {
+            color: #ff0000;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #ff0000;
+            padding-bottom: 5px;
+        }
+        
+        .feature-list {
+            color: #ffffff;
+            margin-left: 20px;
+        }
+        
+        .feature-list li {
+            margin-bottom: 8px;
+            position: relative;
+        }
+        
+        .feature-list li::before {
+            content: "▸";
+            color: #ff0000;
+            position: absolute;
+            left: -15px;
+        }
+        
+        /* Download section */
+        .download-section {
+            background-color: #3d3d3d;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 30px 0;
+        }
+        
+        .download-buttons {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .download-button {
+            background-color: #ff0000;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: background-color 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .download-button:hover {
+            background-color: #cc0000;
+            color: white;
+        }
+        
+        .version-history {
+            margin-top: 30px;
+            background-color: #2c2c2c;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        
+        .version-item {
+            border-bottom: 1px solid #4b4b4b;
+            padding: 15px 0;
+        }
+        
+        .version-item:last-child {
+            border-bottom: none;
+        }
+        
+        .version-number {
+            color: #ff0000;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        
+        .version-date {
+            color: #999;
+            font-size: 14px;
+        }
+        
+        .version-links {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .version-link {
+            background-color: #4b4b4b;
+            color: #ffffff;
+            padding: 4px 8px;
+            border-radius: 3px;
+            text-decoration: none;
+            font-size: 12px;
+        }
+        
+        .version-link:hover {
+            background-color: #666;
+            color: #ffffff;
+        }
+        
+        .footer-note {
+            margin-top: 40px;
+            text-align: center;
+            color: #777;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>SilverFlag | OVERSEE Worldwide Viewer</h1>
+        
+        <div class="nav-buttons">
+            <a href="/" class="nav-button">Home</a>
+            <a href="#features" class="nav-button">Features</a>
+            <a href="#download" class="nav-button">Download</a>
+        </div>
+        
+        <div class="section">
+            <p>A comprehensive GUI application for monitoring and managing IP cameras worldwide. The application provides multiple views including a map view, matrix view, and list view for efficient camera management.</p>
+            <p>This program was primarly created to prove a point about the insecureness of IP cameras. It's essentially <a>Insecam</a href="https://insecam.com"> but a desktop application, and better in some ways.</p>
+        </div>
+        
+        <!-- Image Carousel -->
+        <div class="carousel-container">
+            <div class="carousel-wrapper">
+                <div class="carousel-slide active">
+                    <img src="assets/listviewip2loc.png" alt="List view with IP2Location Demo">
+                </div>
+                <div class="carousel-slide">
+                    <img src="assets/listviewmove.png" alt="List view with camera remote open">
+                </div>
+                <div class="carousel-slide">
+                    <img src="assets/mapview.png" alt="Map view with 100 cameras shown">
+                </div>
+                <div class="carousel-slide">
+                    <img src="assets/matrixview.png" alt="Matrix view demonstration">
+                </div>
+            </div>
+            <button class="carousel-nav carousel-prev" onclick="changeSlide(-1)">&#8249;</button>
+            <button class="carousel-nav carousel-next" onclick="changeSlide(1)">&#8250;</button>
+            <div class="carousel-indicators">
+                <span class="carousel-dot active" onclick="currentSlide(1)"></span>
+                <span class="carousel-dot" onclick="currentSlide(2)"></span>
+                <span class="carousel-dot" onclick="currentSlide(3)"></span>
+                <span class="carousel-dot" onclick="currentSlide(4)"></span>
+            </div>
+        </div>
+        
+        <!-- Features Section -->
+        <div id="features" class="section">
+            <h2>Features</h2>
+            <div class="feature-section">
+                <div class="feature-category">
+                    <h3>Map View</h3>
+                    <p>Visualize camera locations on an interactive map with multiple viewing options.</p>
+                    <ul class="feature-list">
+                        <li>Multiple map styles (OpenStreetMap, Google normal, Google satellite) using tkintermapview</li>
+                        <li>Clickable markers with camera information (in development)</li>
+                        <li>Real-time camera status updates</li>
+                        <li>Automatic geolocation of IP addresses using ipinfo</li>
+                    </ul>
+                </div>
+                
+                <div class="feature-category">
+                    <h3>Matrix View</h3>
+                    <p>Monitor multiple camera feeds simultaneously in a customizable grid layout.</p>
+                    <ul class="feature-list">
+                        <li>Real-time video streams</li>
+                        <li>Customizable grid layout (not much but sure)</li>
+                        <li>Camera status indicators</li>
+                        <li>Efficient resource management</li>
+                    </ul>
+                </div>
+                
+                <div class="feature-category">
+                    <h3>List View</h3>
+                    <p>Comprehensive camera management with detailed controls and information.</p>
+                    <ul class="feature-list">
+                        <li>Detailed camera information display</li>
+                        <li>Camera controls (move, favorite, open in browser)</li>
+                        <li>IP information lookup</li>
+                        <li>Camera status monitoring</li>
+                    </ul>
+                </div>
+                
+                <div class="feature-category">
+                    <h3>Configuration</h3>
+                    <p>Flexible settings and easy setup for various deployment scenarios.</p>
+                    <ul class="feature-list">
+                        <li>Configurable IP list file locations</li>
+                        <li>Database path settings</li>
+                        <li>Map tile server customization</li>
+                        <li>Camera stream parameter adjustment</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Download Section -->
+        <div id="download" class="download-section">
+            <h2>Download OVERSEE</h2>
+            <p>Download the latest version for your operating system:</p>
+            
+            <div class="download-buttons">
+                <a href="https://silverflag.net/downloads/oversee/latest/oversee-macos-universal.zip" class="download-button">
+                    🍎 macOS Universal
+                </a>
+                <a href="https://silverflag.net/downloads/oversee/latest/oversee-windows.exe" class="download-button">
+                    🪟 Windows
+                </a>
+                <a href="https://silverflag.net/downloads/oversee/latest/oversee-linux" class="download-button">
+                    🐧 Linux
+                </a>
+            </div>
+            
+            <!-- Version History -->
+            <div class="version-history">
+                <h3>Version History</h3>
+                
+                <div class="version-item">
+                    <div class="version-number">v0.2.13</div>
+                    <div class="version-date">Latest Release</div>
+                    <p>Enhanced functionality and stability improvements</p>
+                    <div class="version-links">
+                        <a href="https://silverflag.net/downloads/oversee/v0.2.13/oversee-macos-universal.zip" class="version-link">macOS</a>
+                        <a href="https://silverflag.net/downloads/oversee/v0.2.13/oversee-windows.exe" class="version-link">Windows</a>
+                        <a href="https://silverflag.net/downloads/oversee/v0.2.13/oversee-linux" class="version-link">Linux</a>
+                    </div>
+                </div>
+                
+                <div class="version-item">
+                    <div class="version-number">v0.2.10</div>
+                    <div class="version-date">Previous Release</div>
+                    <p>Core functionality and initial feature set</p>
+                    <div class="version-links">
+                        <a href="https://silverflag.net/downloads/oversee/v0.2.10/oversee-macos-universal.zip" class="version-link">macOS</a>
+                        <a href="https://silverflag.net/downloads/oversee/v0.2.10/oversee-windows.exe" class="version-link">Windows</a>
+                        <a href="https://silverflag.net/downloads/oversee/v0.2.10/oversee-linux" class="version-link">Linux</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer-note">
+            <p>OVERSEE Worldwide Viewer - No son, we have 1984 at home.</p>
+        </div>
+    </div>
+    
+    <script>
+        let currentSlideIndex = 0;
+        const slides = document.querySelectorAll('.carousel-slide');
+        const dots = document.querySelectorAll('.carousel-dot');
+        
+        function showSlide(index) {
+            slides.forEach((slide, i) => {
+                slide.classList.toggle('active', i === index);
+            });
+            dots.forEach((dot, i) => {
+                dot.classList.toggle('active', i === index);
+            });
+        }
+        
+        function changeSlide(direction) {
+            currentSlideIndex += direction;
+            if (currentSlideIndex >= slides.length) {
+                currentSlideIndex = 0;
+            } else if (currentSlideIndex < 0) {
+                currentSlideIndex = slides.length - 1;
+            }
+            showSlide(currentSlideIndex);
+        }
+        
+        function currentSlide(index) {
+            currentSlideIndex = index - 1;
+            showSlide(currentSlideIndex);
+        }
+        
+        setInterval(() => {
+            changeSlide(1);
+        }, 5000);
+    </script>
+</body>
+</html>
