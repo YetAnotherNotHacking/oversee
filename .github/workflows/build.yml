@@ -1,4 +1,3 @@
-# Who else HATES applescript?
 name: Build Binaries
 
 on:
@@ -29,16 +28,54 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      # Windows-specific: Install NSIS for installer creation
+      - name: Install NSIS (Windows only)
+        if: runner.os == 'Windows'
+        run: |
+          choco install nsis -y
+
       - name: Build with PyInstaller
         run: |
           if [[ "$RUNNER_OS" == "macOS" ]]; then
             pyinstaller --windowed src/main.py --name SilverFlag --distpath dist
+          elif [[ "$RUNNER_OS" == "Windows" ]]; then
+            pyinstaller --onefile --windowed src/main.py --name SilverFlag --distpath dist
           else
             pyinstaller --onefile --windowed src/main.py --name SilverFlag-${{ matrix.os }} --distpath dist
           fi
+        shell: bash
+
+      # Create AppleScript file separately to avoid escaping hell
+      - name: Create AppleScript for DMG (macOS only)
+        if: runner.os == 'macOS'
+        run: |
+          cat > dmg_setup.applescript << 'APPLESCRIPT_EOF'
+          tell application "Finder"
+            tell disk "Install SilverFlag"
+              open
+              set current view of container window to icon view
+              set toolbar visible of container window to false
+              set statusbar visible of container window to false
+              set the bounds of container window to {100, 100, 900, 600}
+              set viewOptions to the icon view options of container window
+              set arrangement of viewOptions to not arranged
+              set icon size of viewOptions to 128
+              set background picture of viewOptions to file ".background:background.png"
+              
+              -- Position the app and Applications link
+              set position of item "SilverFlag.app" to {200, 300}
+              set position of item "Applications" to {600, 300}
+              
+              close
+              open
+              update without registering applications
+              delay 2
+            end tell
+          end tell
+          APPLESCRIPT_EOF
 
       - name: Create DMG (macOS only)
-        if: matrix.os == 'macos-latest'
+        if: runner.os == 'macOS'
         run: |
           APP_NAME=SilverFlag
           APP_PATH=dist/${APP_NAME}.app
@@ -48,47 +85,161 @@ jobs:
           STAGING_DIR=dist/dmg-staging
           BACKGROUND_PATH=$GITHUB_WORKSPACE/assets/dmg-background.png
 
+          # Create staging directory
           mkdir -p "$STAGING_DIR/.background"
           cp -R "$APP_PATH" "$STAGING_DIR/"
           ln -s /Applications "$STAGING_DIR/Applications"
-          cp "$BACKGROUND_PATH" "$STAGING_DIR/.background/background.png"
+          
+          # Use a default background if custom one doesn't exist
+          if [ -f "$BACKGROUND_PATH" ]; then
+            cp "$BACKGROUND_PATH" "$STAGING_DIR/.background/background.png"
+          else
+            # Create a simple colored background
+            python3 -c "
+          from PIL import Image
+          img = Image.new('RGB', (900, 600), color='#f0f0f0')
+          img.save('$STAGING_DIR/.background/background.png')
+          " || echo "No PIL available, skipping background"
+          fi
 
-          hdiutil create -srcfolder "$STAGING_DIR" -volname "$VOL_NAME" -fs HFS+ -fsargs "-c c=64,a=16,e=16" -format UDRW -ov "$DMG_TEMP"
-          MOUNT_DIR=$(hdiutil attach -nobrowse -noverify -mountpoint /Volumes/"$VOL_NAME" "$DMG_TEMP" | grep Volumes | awk '{print $3}')
+          # Create temporary DMG
+          hdiutil create -srcfolder "$STAGING_DIR" -volname "$VOL_NAME" -fs HFS+ \
+            -fsargs "-c c=64,a=16,e=16" -format UDRW -ov "$DMG_TEMP"
 
+          # Mount the DMG
+          MOUNT_DIR=$(hdiutil attach -readwrite -nobrowse -noverify "$DMG_TEMP" | \
+            egrep '^/dev/' | sed 1q | awk '{print $3}')
+
+          # Give it a moment to mount
           sleep 2
 
-          osascript <<EOF
-            tell application "Finder"
-              tell disk "$VOL_NAME"
-                open
-                set current view of container window to icon view
-                set toolbar visible of container window to false
-                set statusbar visible of container window to false
-                set the bounds of container window to {100, 100, 1000, 700}
-                set viewOptions to the icon view options of container window
-                set arrangement of viewOptions to not arranged
-                set icon size of viewOptions to 128
-                set background picture of viewOptions to file ".background:background.png"
+          # Run the AppleScript
+          osascript dmg_setup.applescript
 
-                set position of item "${APP_NAME}.app" to {200, 300}
-                set position of item "Applications" to {600, 300}
-                close
-                open
-                update without registering applications
-                delay 2
-              end tell
-            end tell
-EOF
-
+          # Unmount and compress
           hdiutil detach "$MOUNT_DIR"
           hdiutil convert "$DMG_TEMP" -format UDZO -imagekey zlib-level=9 -o "dist/${DMG_NAME}"
+          
+          # Clean up
           rm "$DMG_TEMP"
           rm -rf "$STAGING_DIR"
+          rm dmg_setup.applescript
+
+      # Create NSIS installer script for Windows
+      - name: Create NSIS installer script (Windows only)
+        if: runner.os == 'Windows'
+        run: |
+          cat > installer.nsi << 'NSIS_EOF'
+          !define APP_NAME "SilverFlag"
+          !define APP_VERSION "1.0.0"
+          !define APP_PUBLISHER "Your Company"
+          !define APP_URL "https://yourwebsite.com"
+          !define APP_EXE "SilverFlag.exe"
+
+          ; Installer attributes
+          Name "${APP_NAME}"
+          OutFile "dist\SilverFlag-Installer.exe"
+          InstallDir "$PROGRAMFILES64\${APP_NAME}"
+          InstallDirRegKey HKLM "Software\${APP_NAME}" "Install_Dir"
+          RequestExecutionLevel admin
+
+          ; Modern UI
+          !include "MUI2.nsh"
+          !define MUI_ABORTWARNING
+          !define MUI_ICON "${NSISDIR}\Contrib\Graphics\Icons\modern-install.ico"
+          !define MUI_UNICON "${NSISDIR}\Contrib\Graphics\Icons\modern-uninstall.ico"
+
+          ; Pages
+          !insertmacro MUI_PAGE_WELCOME
+          !insertmacro MUI_PAGE_LICENSE "LICENSE.txt"
+          !insertmacro MUI_PAGE_DIRECTORY
+          !insertmacro MUI_PAGE_INSTFILES
+          !insertmacro MUI_PAGE_FINISH
+
+          ; Uninstaller pages
+          !insertmacro MUI_UNPAGE_WELCOME
+          !insertmacro MUI_UNPAGE_CONFIRM
+          !insertmacro MUI_UNPAGE_INSTFILES
+          !insertmacro MUI_UNPAGE_FINISH
+
+          ; Languages
+          !insertmacro MUI_LANGUAGE "English"
+
+          ; Installer sections
+          Section "Install"
+            SetOutPath $INSTDIR
+            File "dist\SilverFlag.exe"
+            
+            ; Create start menu shortcut
+            CreateDirectory "$SMPROGRAMS\${APP_NAME}"
+            CreateShortcut "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}"
+            CreateShortcut "$SMPROGRAMS\${APP_NAME}\Uninstall.lnk" "$INSTDIR\uninstall.exe"
+            
+            ; Create desktop shortcut
+            CreateShortcut "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}"
+            
+            ; Write registry keys
+            WriteRegStr HKLM "Software\${APP_NAME}" "Install_Dir" "$INSTDIR"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "DisplayName" "${APP_NAME}"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "UninstallString" '"$INSTDIR\uninstall.exe"'
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "DisplayVersion" "${APP_VERSION}"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "Publisher" "${APP_PUBLISHER}"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "URLInfoAbout" "${APP_URL}"
+            WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "NoModify" 1
+            WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "NoRepair" 1
+            
+            ; Create uninstaller
+            WriteUninstaller "$INSTDIR\uninstall.exe"
+          SectionEnd
+
+          ; Uninstaller section
+          Section "Uninstall"
+            ; Remove files
+            Delete "$INSTDIR\${APP_EXE}"
+            Delete "$INSTDIR\uninstall.exe"
+            RMDir "$INSTDIR"
+            
+            ; Remove shortcuts
+            Delete "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk"
+            Delete "$SMPROGRAMS\${APP_NAME}\Uninstall.lnk"
+            RMDir "$SMPROGRAMS\${APP_NAME}"
+            Delete "$DESKTOP\${APP_NAME}.lnk"
+            
+            ; Remove registry keys
+            DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
+            DeleteRegKey HKLM "Software\${APP_NAME}"
+          SectionEnd
+          NSIS_EOF
+
+      # Create a basic license file if it doesn't exist
+      - name: Create LICENSE.txt for Windows installer
+        if: runner.os == 'Windows'
+        run: |
+          if [ ! -f LICENSE.txt ]; then
+            echo "MIT License" > LICENSE.txt
+            echo "" >> LICENSE.txt
+            echo "Permission is hereby granted, free of charge, to any person obtaining a copy" >> LICENSE.txt
+            echo "of this software and associated documentation files (the \"Software\"), to deal" >> LICENSE.txt
+            echo "in the Software without restriction, including without limitation the rights" >> LICENSE.txt
+            echo "to use, copy, modify, merge, publish, distribute, sublicense, and/or sell" >> LICENSE.txt
+            echo "copies of the Software, and to permit persons to whom the Software is" >> LICENSE.txt
+            echo "furnished to do so, subject to the following conditions:" >> LICENSE.txt
+            echo "" >> LICENSE.txt
+            echo "The above copyright notice and this permission notice shall be included in all" >> LICENSE.txt
+            echo "copies or substantial portions of the Software." >> LICENSE.txt
+          fi
+        shell: bash
+
+      # Build Windows installer
+      - name: Build Windows installer
+        if: runner.os == 'Windows'
+        run: |
+          makensis installer.nsi
 
       - name: Set build timestamp
         run: |
           echo "DATE_TAG=$(date +'%Y-%m-%d-%H%M')" >> $GITHUB_ENV
+        shell: bash
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -96,6 +247,6 @@ EOF
           name: SilverFlag-${{ matrix.os }}
           path: |
             dist/SilverFlag.dmg
+            dist/SilverFlag-Installer.exe
             dist/SilverFlag-${{ matrix.os }}
             dist/SilverFlag.app
-            dist/*
