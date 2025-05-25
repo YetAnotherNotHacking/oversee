@@ -40,16 +40,24 @@ jobs:
         run: |
           # Install FUSE for AppImage support
           sudo apt-get update
-          sudo apt-get install -y fuse libfuse2
+          sudo apt-get install -y fuse libfuse2 file
           
-          # Download AppImageTool
-          wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-          chmod +x appimagetool-x86_64.AppImage
+          # Download AppImageTool directly as executable
+          wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
           
-          # Extract AppImageTool since FUSE might not work in CI
-          ./appimagetool-x86_64.AppImage --appimage-extract
-          sudo mv squashfs-root/AppRun /usr/local/bin/appimagetool
-          sudo chmod +x /usr/local/bin/appimagetool
+          # Try to run it directly first, if that fails extract it
+          if ! ./appimagetool --help >/dev/null 2>&1; then
+            echo "Direct execution failed, extracting AppImageTool..."
+            ./appimagetool --appimage-extract
+            chmod +x squashfs-root/AppRun
+            # Use the extracted version
+            sudo cp squashfs-root/AppRun /usr/local/bin/appimagetool
+            sudo chmod +x /usr/local/bin/appimagetool
+          else
+            echo "Direct execution works, moving to /usr/local/bin"
+            sudo mv appimagetool /usr/local/bin/appimagetool
+          fi
 
       - name: Build with PyInstaller
         run: |
@@ -116,6 +124,7 @@ jobs:
           
           # Copy the binary
           cp "dist/${APP_NAME}" "$APPDIR/usr/bin/"
+          chmod +x "$APPDIR/usr/bin/${APP_NAME}"
           
           # Copy icon if it exists
           if [ -f "assets/logo.png" ]; then
@@ -137,19 +146,38 @@ jobs:
           
           # Copy .desktop file to AppDir root
           cp "$APPDIR/usr/share/applications/${APP_NAME}.desktop" "$APPDIR/"
+          chmod +x "$APPDIR/${APP_NAME}.desktop"
           
           # Create AppRun script
-          cat > "$APPDIR/AppRun" << APPRUN_EOF
+          cat > "$APPDIR/AppRun" << 'APPRUN_EOF'
           #!/bin/bash
-          HERE="\$(dirname "\$(readlink -f "\${0}")")"
-          EXEC="\${HERE}/usr/bin/${APP_NAME}"
-          exec "\${EXEC}" "\$@"
+          HERE="$(dirname "$(readlink -f "${0}")")"
+          EXEC="${HERE}/usr/bin/SilverFlagOVERSEE"
+          exec "${EXEC}" "$@"
           APPRUN_EOF
           
           chmod +x "$APPDIR/AppRun"
           
-          # Create the AppImage
-          appimagetool "$APPDIR" "dist/${APP_NAME}.AppImage"
+          # Debug: List the AppDir contents
+          echo "AppDir contents:"
+          find "$APPDIR" -type f -exec ls -la {} \;
+          
+          # Create the AppImage using whichever appimagetool is available
+          if command -v appimagetool >/dev/null 2>&1; then
+            echo "Using appimagetool from PATH"
+            appimagetool "$APPDIR" "dist/${APP_NAME}.AppImage"
+          elif [ -f "./appimagetool" ]; then
+            echo "Using local appimagetool"
+            ./appimagetool "$APPDIR" "dist/${APP_NAME}.AppImage"
+          elif [ -f "squashfs-root/AppRun" ]; then
+            echo "Using extracted appimagetool"
+            squashfs-root/AppRun "$APPDIR" "dist/${APP_NAME}.AppImage"
+          else
+            echo "No appimagetool found, creating tar.gz instead"
+            cd dist
+            tar -czf "${APP_NAME}-linux.tar.gz" "${APP_NAME}.AppDir"
+            cd ..
+          fi
 
       # Create AppleScript file separately to avoid escaping hell
       - name: Create AppleScript for DMG (macOS only)
@@ -432,5 +460,6 @@ jobs:
             dist/SilverFlagOVERSEE.dmg
             dist/SilverFlagOVERSEE-Installer.exe
             dist/SilverFlagOVERSEE.AppImage
+            dist/SilverFlagOVERSEE-linux.tar.gz
             dist/SilverFlagOVERSEE
             dist/SilverFlagOVERSEE.app
