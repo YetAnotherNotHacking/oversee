@@ -20,8 +20,24 @@ class FocusedMapWindow:
         y = (self.window.winfo_screenheight() // 2) - (600 // 2)
         self.window.geometry(f"800x600+{x}+{y}")
         
+        # Create control frame at the top
+        control_frame = ttk.Frame(self.window)
+        control_frame.pack(fill="x", padx=10, pady=5)
+        
+        # Add map style selector
+        style_label = ttk.Label(control_frame, text="Map Style:")
+        style_label.pack(side="left", padx=5)
+        
+        self.style_var = tk.StringVar(value="OpenStreetMap")
+        style_combo = ttk.Combobox(control_frame, textvariable=self.style_var, state="readonly")
+        style_combo['values'] = ("OpenStreetMap", "Google normal", "Google satellite")
+        style_combo.pack(side="left", padx=5)
+        
+        # Bind style change
+        style_combo.bind('<<ComboboxSelected>>', self.change_map_style)
+        
         # Create map widget
-        self.map_widget = TkinterMapView(self.window, width=800, height=600, corner_radius=0)
+        self.map_widget = TkinterMapView(self.window, width=800, height=550, corner_radius=0)
         self.map_widget.pack(fill="both", expand=True)
         
         # Add close button
@@ -33,6 +49,19 @@ class FocusedMapWindow:
         
         # Load and display camera location
         self.load_camera_location(ip)
+        
+        # Set initial map style
+        self.change_map_style()
+    
+    def change_map_style(self, event=None):
+        """Change the map style"""
+        style = self.style_var.get()
+        if style == "OpenStreetMap":
+            self.map_widget.set_tile_server("https://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}&s=Ga", max_zoom=22)
+        elif style == "Google normal":
+            self.map_widget.set_tile_server("https://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}&s=Ga", max_zoom=22)
+        elif style == "Google satellite":
+            self.map_widget.set_tile_server("https://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}&s=Ga", max_zoom=22)
     
     def load_camera_location(self, ip):
         """Load camera location from database and display on map"""
@@ -70,7 +99,8 @@ class FocusedMapWindow:
                 
         except Exception as e:
             print(f"Error loading camera location: {e}")
-            # Show error on map
-            self.map_widget.set_position(0, 0)
-            self.map_widget.set_zoom(2)
-            self.map_widget.set_marker(0, 0, text="Error loading location data") 
+            # Only show error if we haven't already set a marker
+            if not self.map_widget.canvas.find_withtag("marker"):
+                self.map_widget.set_position(0, 0)
+                self.map_widget.set_zoom(2)
+                self.map_widget.set_marker(0, 0, text="Error loading location data") 
