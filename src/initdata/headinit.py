@@ -3,6 +3,7 @@ import os
 from initdata.getiplist import scrape_insecam_camera_urls
 from initdata.ip2locdownload import download_database
 from initdata.formatscrapeddata import format_file
+from initdata.getiplistcoordinates import process_ip_list
 
 raw_scraped_data_file = "stream_links.txt" # From scraper
 processed_urls_file = "streamables.txt" # For program to read
@@ -32,3 +33,6 @@ def initall():
     print("Checking if the database is needed, downloading if it's missing")
     download_database(database_url, database_compressed_name, database_uncompressed_name)
     print("Done downloading the ip2loc database")
+    print("Processing IP geolocation data...")
+    process_ip_list()
+    print("Done processing IP geolocation data.")
