@@ -324,7 +324,6 @@
                 <span class="carousel-dot" onclick="currentSlide(4)"></span>
             </div>
         </div>
-        
         <!-- Features Section -->
         <div id="features" class="section">
             <h2>Features</h2>
@@ -339,7 +338,6 @@
                         <li>Automatic geolocation of IP addresses using ipinfo</li>
                     </ul>
                 </div>
-                
                 <div class="feature-category">
                     <h3>Matrix View</h3>
                     <p>Monitor multiple camera feeds simultaneously in a customizable grid layout.</p>
@@ -350,7 +348,6 @@
                         <li>Efficient resource management</li>
                     </ul>
                 </div>
-                
                 <div class="feature-category">
                     <h3>List View</h3>
                     <p>Comprehensive camera management with detailed controls and information.</p>
@@ -361,7 +358,6 @@
                         <li>Camera status monitoring</li>
                     </ul>
                 </div>
-                
                 <div class="feature-category">
                     <h3>Configuration</h3>
                     <p>Flexible settings and easy setup for various deployment scenarios.</p>
@@ -374,7 +370,6 @@
                 </div>
             </div>
         </div>
-        
         <!-- Download Section -->
         <div id="download" class="download-section">
             <h2>Download OVERSEE</h2>
@@ -383,7 +378,6 @@
             <p>macOS: Binary, you must accept the risk in system settings (google how)!</p>
             <p>Windows: Exe, double click it!</p>
             <p>Linux: Unix executable, chmod +x and ./(name here)!</p>
-            
             <div class="download-buttons">
                 <a href="http://silverflag.net/oversee/releases/SilverFlagOVERSEE_MacUniversal_0-2-13" class="download-button">
                     🍎 macOS Universal
@@ -395,8 +389,7 @@
                     🐧 Linux
                 </a>
             </div>
-            
-            <!-- Version History -->
+            <!-- Version history (more to come) -->
             <div class="version-history">
                 <h3>Version History</h3>
                 
@@ -412,17 +405,14 @@
                 </div>
             </div>
         </div>
-        
         <div class="footer-note">
             <p>OVERSEE Worldwide Viewer: No son, we have 1984 at home.</p>
         </div>
     </div>
-    
     <script>
         let currentSlideIndex = 0;
         const slides = document.querySelectorAll('.carousel-slide');
         const dots = document.querySelectorAll('.carousel-dot');
-        
         function showSlide(index) {
             slides.forEach((slide, i) => {
                 slide.classList.toggle('active', i === index);
@@ -431,7 +421,6 @@
                 dot.classList.toggle('active', i === index);
             });
         }
-        
         function changeSlide(direction) {
             currentSlideIndex += direction;
             if (currentSlideIndex >= slides.length) {
@@ -441,12 +430,10 @@
             }
             showSlide(currentSlideIndex);
         }
-        
         function currentSlide(index) {
             currentSlideIndex = index - 1;
             showSlide(currentSlideIndex);
         }
-        
         setInterval(() => {
             changeSlide(1);
         }, 5000);
