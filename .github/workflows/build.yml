@@ -48,21 +48,21 @@ jobs:
             # macOS with icon
             if [ -f "assets/logo.png" ]; then
               # Convert PNG to ICNS for macOS
-              mkdir -p SilverFlag.iconset
-              sips -z 16 16 assets/logo.png --out SilverFlag.iconset/icon_16x16.png
-              sips -z 32 32 assets/logo.png --out SilverFlag.iconset/icon_16x16@2x.png
-              sips -z 32 32 assets/logo.png --out SilverFlag.iconset/icon_32x32.png
-              sips -z 64 64 assets/logo.png --out SilverFlag.iconset/icon_32x32@2x.png
-              sips -z 128 128 assets/logo.png --out SilverFlag.iconset/icon_128x128.png
-              sips -z 256 256 assets/logo.png --out SilverFlag.iconset/icon_128x128@2x.png
-              sips -z 256 256 assets/logo.png --out SilverFlag.iconset/icon_256x256.png
-              sips -z 512 512 assets/logo.png --out SilverFlag.iconset/icon_256x256@2x.png
-              sips -z 512 512 assets/logo.png --out SilverFlag.iconset/icon_512x512.png
-              cp assets/logo.png SilverFlag.iconset/icon_512x512@2x.png
-              iconutil -c icns SilverFlag.iconset
-              pyinstaller --windowed --icon=SilverFlag.icns src/main.py --name SilverFlag --distpath dist
+              mkdir -p SilverFlagOVERSEE.iconset
+              sips -z 16 16 assets/logo.png --out SilverFlagOVERSEE.iconset/icon_16x16.png
+              sips -z 32 32 assets/logo.png --out SilverFlagOVERSEE.iconset/icon_16x16@2x.png
+              sips -z 32 32 assets/logo.png --out SilverFlagOVERSEE.iconset/icon_32x32.png
+              sips -z 64 64 assets/logo.png --out SilverFlagOVERSEE.iconset/icon_32x32@2x.png
+              sips -z 128 128 assets/logo.png --out SilverFlagOVERSEE.iconset/icon_128x128.png
+              sips -z 256 256 assets/logo.png --out SilverFlagOVERSEE.iconset/icon_128x128@2x.png
+              sips -z 256 256 assets/logo.png --out SilverFlagOVERSEE.iconset/icon_256x256.png
+              sips -z 512 512 assets/logo.png --out SilverFlagOVERSEE.iconset/icon_256x256@2x.png
+              sips -z 512 512 assets/logo.png --out SilverFlagOVERSEE.iconset/icon_512x512.png
+              cp assets/logo.png SilverFlagOVERSEE.iconset/icon_512x512@2x.png
+              iconutil -c icns SilverFlagOVERSEE.iconset
+              pyinstaller --windowed --icon=SilverFlagOVERSEE.icns src/main.py --name SilverFlagOVERSEE --distpath dist
             else
-              pyinstaller --windowed src/main.py --name SilverFlag --distpath dist
+              pyinstaller --windowed src/main.py --name SilverFlagOVERSEE --distpath dist
             fi
           elif [[ "$RUNNER_OS" == "Windows" ]]; then
             # Windows with icon
@@ -80,16 +80,16 @@ jobs:
               sys.exit(0)  # Don't fail the build
           "
               if [ -f "logo.ico" ]; then
-                pyinstaller --onefile --windowed --icon=logo.ico src/main.py --name SilverFlag --distpath dist
+                pyinstaller --onefile --windowed --icon=logo.ico src/main.py --name SilverFlagOVERSEE --distpath dist
               else
-                pyinstaller --onefile --windowed src/main.py --name SilverFlag --distpath dist
+                pyinstaller --onefile --windowed src/main.py --name SilverFlagOVERSEE --distpath dist
               fi
             else
-              pyinstaller --onefile --windowed src/main.py --name SilverFlag --distpath dist
+              pyinstaller --onefile --windowed src/main.py --name SilverFlagOVERSEE --distpath dist
             fi
           else
             # Linux
-            pyinstaller --onefile --windowed src/main.py --name SilverFlag --distpath dist
+            pyinstaller --onefile --windowed src/main.py --name SilverFlagOVERSEE --distpath dist
           fi
         shell: bash
 
@@ -97,7 +97,7 @@ jobs:
       - name: Create AppImage (Linux only)
         if: runner.os == 'Linux'
         run: |
-          APP_NAME=SilverFlag
+          APP_NAME=SilverFlagOVERSEE
           APPDIR=dist/${APP_NAME}.AppDir
           
           # Create AppDir structure
@@ -119,7 +119,7 @@ jobs:
           [Desktop Entry]
           Type=Application
           Name=${APP_NAME}
-          Comment=SilverFlag Application
+          Comment=SilverFlag OVERSEE Application
           Exec=${APP_NAME}
           Icon=${APP_NAME}
           Categories=Utility;
@@ -148,7 +148,7 @@ jobs:
         run: |
           cat > dmg_setup.applescript << 'APPLESCRIPT_EOF'
           tell application "Finder"
-            tell disk "Install SilverFlag"
+            tell disk "Install SilverFlagOVERSEE"
               open
               set current view of container window to icon view
               set toolbar visible of container window to false
@@ -160,7 +160,7 @@ jobs:
               set background picture of viewOptions to file ".background:background.png"
               
               -- Position the app and Applications link
-              set position of item "SilverFlag.app" to {200, 300}
+              set position of item "SilverFlagOVERSEE.app" to {200, 300}
               set position of item "Applications" to {600, 300}
               
               close
@@ -174,7 +174,7 @@ jobs:
       - name: Create DMG (macOS only)
         if: runner.os == 'macOS'
         run: |
-          APP_NAME=SilverFlag
+          APP_NAME=SilverFlagOVERSEE
           APP_PATH=dist/${APP_NAME}.app
           DMG_NAME=${APP_NAME}.dmg
           VOL_NAME="Install ${APP_NAME}"
@@ -203,35 +203,48 @@ jobs:
           hdiutil create -srcfolder "$STAGING_DIR" -volname "$VOL_NAME" -fs HFS+ \
             -fsargs "-c c=64,a=16,e=16" -format UDRW -ov "$DMG_TEMP"
 
-          # Mount the DMG
-          MOUNT_DIR=$(hdiutil attach -readwrite -nobrowse -noverify "$DMG_TEMP" | \
-            egrep '^/dev/' | sed 1q | awk '{print $3}')
+          # Mount the DMG and get the mount point more reliably
+          MOUNT_OUTPUT=$(hdiutil attach -readwrite -nobrowse -noverify "$DMG_TEMP" 2>/dev/null)
+          MOUNT_DIR=$(echo "$MOUNT_OUTPUT" | grep -E '^/dev/' | tail -1 | awk '{print $3}')
+          
+          echo "Mount directory: $MOUNT_DIR"
+          
+          # Give it a moment to mount and verify it mounted
+          sleep 3
+          if [ -d "$MOUNT_DIR" ]; then
+            echo "DMG mounted successfully at $MOUNT_DIR"
+            
+            # Run the AppleScript
+            osascript dmg_setup.applescript || echo "AppleScript failed, continuing..."
+            
+            # Give Finder time to process
+            sleep 2
+            
+            # Unmount
+            hdiutil detach "$MOUNT_DIR" || echo "Detach failed, trying force detach..."
+            hdiutil detach "$MOUNT_DIR" -force || echo "Force detach also failed, continuing..."
+          else
+            echo "Failed to mount DMG properly, skipping AppleScript"
+          fi
 
-          # Give it a moment to mount
-          sleep 2
-
-          # Run the AppleScript
-          osascript dmg_setup.applescript
-
-          # Unmount and compress
-          hdiutil detach "$MOUNT_DIR"
+          # Convert to compressed DMG
           hdiutil convert "$DMG_TEMP" -format UDZO -imagekey zlib-level=9 -o "dist/${DMG_NAME}"
           
           # Clean up
-          rm "$DMG_TEMP"
+          rm -f "$DMG_TEMP"
           rm -rf "$STAGING_DIR"
-          rm dmg_setup.applescript
+          rm -f dmg_setup.applescript
 
       # Create NSIS installer script for Windows
       - name: Create NSIS installer script (Windows only)
         if: runner.os == 'Windows'
         run: |
           cat > installer.nsi << 'NSIS_EOF'
-          !define APP_NAME "SilverFlagOVERSEE"
-          !define APP_VERSION "0.2.14"
-          !define APP_PUBLISHER "SilverFlag"
-          !define APP_URL "https://silverflag.net"
-          !define APP_EXE "SilverFlagOVERSEE.exe"
+          !define APP_NAME "SilverFlag"
+          !define APP_VERSION "1.0.0"
+          !define APP_PUBLISHER "Your Company"
+          !define APP_URL "https://yourwebsite.com"
+          !define APP_EXE "SilverFlag.exe"
 
           ; Installer attributes
           Name "${APP_NAME}"
@@ -350,8 +363,8 @@ jobs:
         with:
           name: SilverFlag-${{ matrix.os }}
           path: |
-            dist/SilverFlag.dmg
-            dist/SilverFlag-Installer.exe
-            dist/SilverFlag.AppImage
-            dist/SilverFlag
-            dist/SilverFlag.app
+            dist/SilverFlagOVERSEE.dmg
+            dist/SilverFlagOVERSEE-Installer.exe
+            dist/SilverFlagOVERSEE.AppImage
+            dist/SilverFlagOVERSEE
+            dist/SilverFlagOVERSEE.app
