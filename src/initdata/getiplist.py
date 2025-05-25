@@ -6,6 +6,8 @@ import os
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import queue
+import sys
+import settings
 
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
@@ -39,8 +41,14 @@ def crawl_page_worker(page_info):
     links = extract_stream_links(page_url)
     return page_num, links
 
-def scrape_insecam_camera_urls(output_file="stream_links.txt", base_url="http://www.insecam.org/en/byrating/", 
-                              total_pages=448, max_workers=5, progress_callback=None, force_redownload=False):
+def scrape_insecam_camera_urls(output_file=settings.insecam_output_file, base_url=settings.base_url, total_pages=settings.total_pages, max_workers=5, progress_callback=None, force_redownload=False):
+    """Scrape camera URLs from insecam.org"""
+    print(f"Starting scrape of {total_pages} pages from {base_url}")
+    print(f"Output will be saved to: {output_file}")
+    
+    # Create output directory if it doesn't exist
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    
     # Check if file already exists and has content
     if os.path.exists(output_file) and not force_redownload:
         file_size = os.path.getsize(output_file)
