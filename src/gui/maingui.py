@@ -473,7 +473,12 @@ class MainGUI:
         """Update the matrix display with current camera streams"""
         # Only update if matrix view is active
         if not self.matrix_update_active:
-            self.root.after(2000, self.update_matrix_display)
+            # Clean up resources when stopping
+            try:
+                from gui.rendermatrix import cleanup_camera_manager
+                cleanup_camera_manager()
+            except ImportError:
+                pass
             return
             
         # Get canvas dimensions
@@ -510,14 +515,15 @@ class MainGUI:
             self.matrix_canvas.delete("all")
             self.matrix_canvas.create_text(
                 canvas_width//2, canvas_height//2,
-                                            text=f"Display error: {str(e)[:50]}...", 
+                text=f"Display error: {str(e)[:50]}...", 
                 fill="red",
                 font=('Arial', 12),
                 justify="center"
             )
         
-        # Schedule next update
-        self.root.after(2000, self.update_matrix_display)
+        # Schedule next update only if still active
+        if self.matrix_update_active:
+            self.root.after(2000, self.update_matrix_display)
         
     def cleanup_on_close(self):
         """Clean up resources when closing the application"""
@@ -554,13 +560,28 @@ class MainGUI:
         # Bind tab change event
         self.notebook.bind('<<NotebookTabChanged>>', self.on_tab_change)
         
-        list_frame.grid_rowconfigure(0, weight=1)
+        list_frame.grid_rowconfigure(1, weight=1)  # Changed to 1 to make room for search
         list_frame.grid_columnconfigure(0, weight=1)
         list_frame.grid_columnconfigure(1, weight=2)
         
+        # Add search frame at the top
+        search_frame = ttk.Frame(list_frame)
+        search_frame.grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 5))
+        
+        # Search label and entry
+        ttk.Label(search_frame, text="Search:").pack(side="left", padx=(0, 5))
+        self.search_var = tk.StringVar()
+        self.search_var.trace('w', self.on_search_change)  # Bind to search changes
+        search_entry = ttk.Entry(search_frame, textvariable=self.search_var, width=40)
+        search_entry.pack(side="left", fill="x", expand=True)
+        
+        # Add reset button
+        reset_button = ttk.Button(search_frame, text="Reset List", command=self.reset_list_view)
+        reset_button.pack(side="left", padx=5)
+        
         # Left panel - scrollable list
         left_panel = ttk.Frame(list_frame)
-        left_panel.grid(row=0, column=0, sticky="nsew", padx=(10, 5), pady=10)
+        left_panel.grid(row=1, column=0, sticky="nsew", padx=(10, 5), pady=10)
         left_panel.grid_rowconfigure(0, weight=1)
         left_panel.grid_columnconfigure(0, weight=1)
         
@@ -572,7 +593,13 @@ class MainGUI:
         
         self.tree.column('#0', width=50)
         self.tree.column('Name', width=150)
-        self.tree.column('Status', width=80)
+        self.tree.column('Status', width=100)
+        
+        # Configure status colors
+        self.tree.tag_configure('online', background='#1a472a', foreground='#ffffff')  # Dark green
+        self.tree.tag_configure('offline', background='#4a1a1a', foreground='#ffffff')  # Dark red
+        self.tree.tag_configure('error', background='#4a3a1a', foreground='#ffffff')    # Dark yellow
+        self.tree.tag_configure('unknown', background='#2b2b2b', foreground='#ffffff')  # Dark gray
         
         # Initialize camera data storage
         self.camera_data = {}
@@ -598,7 +625,7 @@ class MainGUI:
         
         # Right panel - details view
         right_panel = ttk.Frame(list_frame)
-        right_panel.grid(row=0, column=1, sticky="nsew", padx=(5, 10), pady=10)
+        right_panel.grid(row=1, column=1, sticky="nsew", padx=(5, 10), pady=10)
         right_panel.grid_rowconfigure(1, weight=1)
         right_panel.grid_columnconfigure(0, weight=1)
         
@@ -643,7 +670,7 @@ class MainGUI:
         
         self.prop_resolution = ttk.Label(self.properties_frame, text="Resolution: -")
         self.prop_resolution.grid(row=3, column=0, sticky="w", pady=2)
-        
+
     def on_tab_change(self, event):
         """Handle tab changes to manage active views and threads"""
         current_tab = self.notebook.select()
@@ -656,10 +683,17 @@ class MainGUI:
         if self.active_view == "matrix":
             self.matrix_update_active = True
         else:
+            # Stop matrix updates if switching away
             self.matrix_update_active = False
             # Clear matrix canvas if switching away
             if hasattr(self, 'matrix_canvas'):
                 self.matrix_canvas.delete("all")
+                # Force cleanup of any remaining matrix resources
+                try:
+                    from gui.rendermatrix import cleanup_camera_manager
+                    cleanup_camera_manager()
+                except ImportError:
+                    pass
         
         # Handle list view
         if self.active_view != "list":
@@ -700,20 +734,28 @@ class MainGUI:
             print(f"Error loading IP addresses: {e}")
 
     def update_tree_item(self, item_id, ip, status):
-        """Update treeview item with new status"""
+        """Update treeview item with new status and resort if needed"""
         try:
-            # Set status color based on state
-            if status == "Online":
-                status_color = "#00ff00"  # Green
-            elif status == "Offline":
-                status_color = "#ff0000"  # Red
-            elif status == "Processing":
-                status_color = "#000080"  # Navy Blue
-            else:
-                status_color = "#ffffff"  # White for unknown/other states
+            # Get current item values
+            current_values = self.tree.item(item_id)['values']
+            if not current_values:
+                return
+                
+            # Update the item with new status
+            self.tree.item(item_id, values=(current_values[0], status))
             
-            self.tree.item(item_id, values=(ip, status), tags=(status,))
-            self.tree.tag_configure(status, foreground=status_color)
+            # Set appropriate tag based on status
+            if status == "ONLINE":
+                self.tree.item(item_id, tags=('online',))
+                # Move online items to top
+                self.tree.move(item_id, '', 0)
+            elif status == "offline":
+                self.tree.item(item_id, tags=('offline',))
+            elif status == "Error":
+                self.tree.item(item_id, tags=('error',))
+            else:
+                self.tree.item(item_id, tags=('unknown',))
+                
         except tk.TclError:
             pass  # Item may have been deleted
 
@@ -1076,6 +1118,53 @@ class MainGUI:
                 os.execl(python, python, *sys.argv)
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to reinitialize: {e}")
+
+    def reset_list_view(self):
+        """Reset the list view to show all items"""
+        # Clear search
+        self.search_var.set("")
+        
+        # Clear the tree
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        
+        # Reload all IP addresses
+        self.load_ip_addresses()
+        
+        # Clear selection
+        self.tree.selection_remove(self.tree.selection())
+
+    def on_search_change(self, *args):
+        """Handle search input changes"""
+        search_text = self.search_var.get().lower()
+        
+        # Clear current selection
+        self.tree.selection_remove(self.tree.selection())
+        
+        # If search is empty, show all items
+        if not search_text:
+            for item in self.tree.get_children():
+                self.tree.reattach(item, '', 'end')
+            return
+        
+        # Search through all items
+        for item in self.tree.get_children():
+            values = self.tree.item(item)['values']
+            if not values:
+                continue
+                
+            ip = values[0].lower()
+            # Check if search text matches IP or endpoint
+            if search_text in ip:
+                # Select the first match
+                if not self.tree.selection():
+                    self.tree.selection_set(item)
+                    self.tree.see(item)
+                # Make sure matching items are visible
+                self.tree.reattach(item, '', 'end')
+            else:
+                # Hide non-matching items
+                self.tree.detach(item)
 
 
 def runmaingui():
