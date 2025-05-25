@@ -17,30 +17,33 @@ class StartUpMenu:
         self.window = tk.Tk()
         self.window.title("Loading...")
         
-        # Configure window properties
         window_width = 450
-        window_height = 220  # Increased height for dual progress bars
+        window_height = 350
         screen_width = self.window.winfo_screenwidth()
         screen_height = self.window.winfo_screenheight()
         x = (screen_width - window_width) // 2
         y = (screen_height - window_height) // 2
         
-        # Set geometry first
         self.window.geometry(f"{window_width}x{window_height}+{x}+{y}")
         
-        # Force window to front and make it visible
         self.window.lift()
         self.window.attributes('-topmost', True)
         self.window.focus_force()
         
-        # Make window non-resizable
         self.window.resizable(False, False)
-        self.window.configure(bg='#2c3e50')
+        self.window.configure(bg='black')
         
-        # Remove window decorations AFTER positioning and making visible
+        style = ttk.Style()
+        style.configure("TProgressbar", 
+                       troughcolor='black',
+                       background='#2c3e50',
+                       bordercolor='black',
+                       lightcolor='black',
+                       darkcolor='black')
+        
         self.window.after(100, lambda: self.window.overrideredirect(True))
         
-        main_frame = tk.Frame(self.window, bg='#2c3e50', padx=20, pady=20)
+        main_frame = tk.Frame(self.window, bg='black', padx=20, pady=20)
         main_frame.pack(fill='both', expand=True)
         
         title_label = tk.Label(
@@ -48,12 +51,12 @@ class StartUpMenu:
             text="Loading Application...", 
             font=('Arial', 16, 'bold'),
             fg='white',
-            bg='#2c3e50'
+            bg='black'
         )
         title_label.pack(pady=(0, 15))
         
         # Main progress section
-        main_progress_frame = tk.Frame(main_frame, bg='#2c3e50')
+        main_progress_frame = tk.Frame(main_frame, bg='black')
         main_progress_frame.pack(fill='x', pady=(0, 15))
         
         tk.Label(
@@ -61,7 +64,7 @@ class StartUpMenu:
             text="Overall Progress:",
             font=('Arial', 9, 'bold'),
             fg='#ecf0f1',
-            bg='#2c3e50'
+            bg='black'
         ).pack(anchor='w')
         
         self.status_label = tk.Label(
@@ -69,7 +72,7 @@ class StartUpMenu:
             text=self.loadup_status,
             font=('Arial', 10),
             fg='#ecf0f1',
-            bg='#2c3e50',
+            bg='black',
             wraplength=400
         )
         self.status_label.pack(pady=(2, 5), anchor='w')
@@ -78,7 +81,8 @@ class StartUpMenu:
             main_progress_frame,
             length=400,
             mode='determinate',
-            maximum=100
+            maximum=100,
+            style="TProgressbar"
         )
         self.progress_bar.pack(pady=(0, 5))
         
@@ -87,20 +91,20 @@ class StartUpMenu:
             text="0%",
             font=('Arial', 10),
             fg='#ecf0f1',
-            bg='#2c3e50'
+            bg='black'
         )
         self.percentage_label.pack(anchor='w')
         
         # Scraping progress section
-        scraping_progress_frame = tk.Frame(main_frame, bg='#2c3e50')
-        scraping_progress_frame.pack(fill='x')
+        scraping_progress_frame = tk.Frame(main_frame, bg='black')
+        scraping_progress_frame.pack(fill='x', pady=(0, 30))  # Increased padding
         
         tk.Label(
             scraping_progress_frame,
             text="Web Scraping Progress:",
             font=('Arial', 9, 'bold'),
             fg='#ecf0f1',
-            bg='#2c3e50'
+            bg='black'
         ).pack(anchor='w')
         
         self.scraping_status_label = tk.Label(
@@ -108,7 +112,7 @@ class StartUpMenu:
             text=self.scraping_status,
             font=('Arial', 10),
             fg='#bdc3c7',
-            bg='#2c3e50',
+            bg='black',
             wraplength=400
         )
         self.scraping_status_label.pack(pady=(2, 5), anchor='w')
@@ -117,7 +121,8 @@ class StartUpMenu:
             scraping_progress_frame,
             length=400,
             mode='determinate',
-            maximum=100
+            maximum=100,
+            style="TProgressbar"
         )
         self.scraping_progress_bar.pack(pady=(0, 5))
         
@@ -126,9 +131,26 @@ class StartUpMenu:
             text="0%",
             font=('Arial', 10),
             fg='#bdc3c7',
-            bg='#2c3e50'
+            bg='black'
         )
         self.scraping_percentage_label.pack(anchor='w')
+        
+        # Add skip button with more padding and larger size
+        skip_button = tk.Button(
+            main_frame,
+            text="Skip IP2LOC Loading",
+            command=self._skip_loading,
+            bg='#2c3e50',
+            fg='white',
+            font=('Arial', 14, 'bold'),  # Increased font size further
+            relief='flat',
+            padx=30,  # Increased horizontal padding
+            pady=15,  # Increased vertical padding
+            cursor='hand2',
+            activebackground='#34495e',  # Darker color when pressed
+            activeforeground='white'
+        )
+        skip_button.pack(pady=(30, 0))  # Increased top padding
         
         # Force window update and visibility
         self.window.update_idletasks()
@@ -147,7 +169,7 @@ class StartUpMenu:
                 # Re-center after overrideredirect
                 self.window.update_idletasks()
                 window_width = 450
-                window_height = 220
+                window_height = 350
                 screen_width = self.window.winfo_screenwidth()
                 screen_height = self.window.winfo_screenheight()
                 x = (screen_width - window_width) // 2
@@ -257,3 +279,8 @@ class StartUpMenu:
             except Exception as e:
                 print(f"Error closing window: {e}")
             self.window = None
+    
+    def _skip_loading(self):
+        """Skip the IP2LOC loading process"""
+        print("Skipping IP2LOC loading...")
+        self._complete_loading()
