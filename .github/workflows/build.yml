@@ -34,16 +34,113 @@ jobs:
         run: |
           choco install nsis -y
 
+      # Linux-specific: Install AppImage tools
+      - name: Install AppImage tools (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+          sudo mv appimagetool-x86_64.AppImage /usr/local/bin/appimagetool
+
       - name: Build with PyInstaller
         run: |
           if [[ "$RUNNER_OS" == "macOS" ]]; then
-            pyinstaller --windowed src/main.py --name SilverFlag --distpath dist
+            # macOS with icon
+            if [ -f "assets/logo.png" ]; then
+              # Convert PNG to ICNS for macOS
+              mkdir -p SilverFlag.iconset
+              sips -z 16 16 assets/logo.png --out SilverFlag.iconset/icon_16x16.png
+              sips -z 32 32 assets/logo.png --out SilverFlag.iconset/icon_16x16@2x.png
+              sips -z 32 32 assets/logo.png --out SilverFlag.iconset/icon_32x32.png
+              sips -z 64 64 assets/logo.png --out SilverFlag.iconset/icon_32x32@2x.png
+              sips -z 128 128 assets/logo.png --out SilverFlag.iconset/icon_128x128.png
+              sips -z 256 256 assets/logo.png --out SilverFlag.iconset/icon_128x128@2x.png
+              sips -z 256 256 assets/logo.png --out SilverFlag.iconset/icon_256x256.png
+              sips -z 512 512 assets/logo.png --out SilverFlag.iconset/icon_256x256@2x.png
+              sips -z 512 512 assets/logo.png --out SilverFlag.iconset/icon_512x512.png
+              cp assets/logo.png SilverFlag.iconset/icon_512x512@2x.png
+              iconutil -c icns SilverFlag.iconset
+              pyinstaller --windowed --icon=SilverFlag.icns src/main.py --name SilverFlag --distpath dist
+            else
+              pyinstaller --windowed src/main.py --name SilverFlag --distpath dist
+            fi
           elif [[ "$RUNNER_OS" == "Windows" ]]; then
-            pyinstaller --onefile --windowed src/main.py --name SilverFlag --distpath dist
+            # Windows with icon
+            if [ -f "assets/logo.png" ]; then
+              # Convert PNG to ICO for Windows using Python
+              python -c "
+          from PIL import Image
+          import sys
+          try:
+              img = Image.open('assets/logo.png')
+              img.save('logo.ico', format='ICO', sizes=[(16,16), (32,32), (48,48), (64,64), (128,128), (256,256)])
+              print('Icon converted successfully')
+          except Exception as e:
+              print(f'Icon conversion failed: {e}')
+              sys.exit(0)  # Don't fail the build
+          "
+              if [ -f "logo.ico" ]; then
+                pyinstaller --onefile --windowed --icon=logo.ico src/main.py --name SilverFlag --distpath dist
+              else
+                pyinstaller --onefile --windowed src/main.py --name SilverFlag --distpath dist
+              fi
+            else
+              pyinstaller --onefile --windowed src/main.py --name SilverFlag --distpath dist
+            fi
           else
-            pyinstaller --onefile --windowed src/main.py --name SilverFlag-${{ matrix.os }} --distpath dist
+            # Linux
+            pyinstaller --onefile --windowed src/main.py --name SilverFlag --distpath dist
           fi
         shell: bash
+
+      # Create AppImage for Linux
+      - name: Create AppImage (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          APP_NAME=SilverFlag
+          APPDIR=dist/${APP_NAME}.AppDir
+          
+          # Create AppDir structure
+          mkdir -p "$APPDIR/usr/bin"
+          mkdir -p "$APPDIR/usr/share/applications"
+          mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
+          
+          # Copy the binary
+          cp "dist/${APP_NAME}" "$APPDIR/usr/bin/"
+          
+          # Copy icon if it exists
+          if [ -f "assets/logo.png" ]; then
+            cp "assets/logo.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/${APP_NAME}.png"
+            cp "assets/logo.png" "$APPDIR/${APP_NAME}.png"
+          fi
+          
+          # Create .desktop file
+          cat > "$APPDIR/usr/share/applications/${APP_NAME}.desktop" << DESKTOP_EOF
+          [Desktop Entry]
+          Type=Application
+          Name=${APP_NAME}
+          Comment=SilverFlag Application
+          Exec=${APP_NAME}
+          Icon=${APP_NAME}
+          Categories=Utility;
+          Terminal=false
+          DESKTOP_EOF
+          
+          # Copy .desktop file to AppDir root
+          cp "$APPDIR/usr/share/applications/${APP_NAME}.desktop" "$APPDIR/"
+          
+          # Create AppRun script
+          cat > "$APPDIR/AppRun" << APPRUN_EOF
+          #!/bin/bash
+          HERE="\$(dirname "\$(readlink -f "\${0}")")"
+          EXEC="\${HERE}/usr/bin/${APP_NAME}"
+          exec "\${EXEC}" "\$@"
+          APPRUN_EOF
+          
+          chmod +x "$APPDIR/AppRun"
+          
+          # Create the AppImage
+          appimagetool "$APPDIR" "dist/${APP_NAME}.AppImage"
 
       # Create AppleScript file separately to avoid escaping hell
       - name: Create AppleScript for DMG (macOS only)
@@ -130,11 +227,11 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           cat > installer.nsi << 'NSIS_EOF'
-          !define APP_NAME "SilverFlag"
-          !define APP_VERSION "1.0.0"
-          !define APP_PUBLISHER "Your Company"
-          !define APP_URL "https://yourwebsite.com"
-          !define APP_EXE "SilverFlag.exe"
+          !define APP_NAME "SilverFlagOVERSEE"
+          !define APP_VERSION "0.2.14"
+          !define APP_PUBLISHER "SilverFlag"
+          !define APP_URL "https://silverflag.net"
+          !define APP_EXE "SilverFlagOVERSEE.exe"
 
           ; Installer attributes
           Name "${APP_NAME}"
@@ -146,8 +243,15 @@ jobs:
           ; Modern UI
           !include "MUI2.nsh"
           !define MUI_ABORTWARNING
-          !define MUI_ICON "${NSISDIR}\Contrib\Graphics\Icons\modern-install.ico"
-          !define MUI_UNICON "${NSISDIR}\Contrib\Graphics\Icons\modern-uninstall.ico"
+          
+          ; Use custom icon if available
+          !if /FileExists "logo.ico"
+            !define MUI_ICON "logo.ico"
+            !define MUI_UNICON "logo.ico"
+          !else
+            !define MUI_ICON "${NSISDIR}\Contrib\Graphics\Icons\modern-install.ico"
+            !define MUI_UNICON "${NSISDIR}\Contrib\Graphics\Icons\modern-uninstall.ico"
+          !endif
 
           ; Pages
           !insertmacro MUI_PAGE_WELCOME
@@ -248,5 +352,6 @@ jobs:
           path: |
             dist/SilverFlag.dmg
             dist/SilverFlag-Installer.exe
-            dist/SilverFlag-${{ matrix.os }}
+            dist/SilverFlag.AppImage
+            dist/SilverFlag
             dist/SilverFlag.app
