@@ -39,8 +39,21 @@ class SettingsWindow:
         self.style = ttk.Style()
         self.style.configure('Settings.TLabel', foreground='white', background='#2b2b2b')
         self.style.configure('Settings.TFrame', background='#2b2b2b')
-        self.style.configure('Settings.TCombobox', foreground='white', background='#3c3f41')
-        self.style.configure('Settings.TEntry', foreground='white', background='#3c3f41')
+        self.style.configure('Settings.TCombobox', foreground='white', background='#3c3f41', fieldbackground='#3c3f41')
+        self.style.configure('Settings.TEntry', foreground='white', background='#3c3f41', fieldbackground='#3c3f41')
+        
+        # Configure the combobox popup list
+        self.style.map('Settings.TCombobox',
+            fieldbackground=[('readonly', '#3c3f41')],
+            selectbackground=[('readonly', '#4b6eaf')],
+            selectforeground=[('readonly', 'white')]
+        )
+        
+        # Configure the entry field
+        self.style.map('Settings.TEntry',
+            fieldbackground=[('readonly', '#3c3f41')],
+            foreground=[('readonly', 'white')]
+        )
         
         # Main container
         main_frame = ttk.Frame(self.window, style='Settings.TFrame')
