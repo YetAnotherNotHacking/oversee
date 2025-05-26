@@ -15,7 +15,7 @@ import os
 import gui
 import settings
 import numpy as np
-from gui.movementgui import MovementControlWindow
+from gui.movementgui import MovementGUI
 from gui.settingsgui import SettingsWindow
 from gui.focusedmapgui import FocusedMapWindow
 from concurrent.futures import ThreadPoolExecutor
@@ -39,8 +39,11 @@ class MainGUI:
         self.status_checker_active = True
         self.is_shutting_down = False
         
-        # Initialize thread pool
+        # Initialize thread pool for camera checks
         self.thread_pool = ThreadPoolExecutor(max_workers=4)
+        
+        # Initialize status checker thread
+        self.status_checker_thread = None
         
         # Initialize image queue for cleanup
         self.image_queue = queue.Queue()
@@ -223,9 +226,10 @@ class MainGUI:
                     if self.status_checker_active and not self.is_shutting_down:
                         time.sleep(60)  # Wait a minute before retrying
         
-        # Start status checker in thread pool
-        if not self.thread_pool._shutdown and not self.is_shutting_down:
-            self.thread_pool.submit(status_checker)
+        # Start status checker in a dedicated thread
+        if not self.status_checker_thread or not self.status_checker_thread.is_alive():
+            self.status_checker_thread = threading.Thread(target=status_checker, daemon=True)
+            self.status_checker_thread.start()
 
     def check_camera_status(self, item_id, ip):
         """Check if camera is accessible and update status"""
@@ -532,76 +536,157 @@ class MainGUI:
         self.notebook.add(matrix_frame, text="Matrix View")
         
         # Configure frame for resizing
-        matrix_frame.grid_rowconfigure(0, weight=1)
+        matrix_frame.grid_rowconfigure(1, weight=1)  # Changed from 0 to 1
         matrix_frame.grid_columnconfigure(0, weight=1)
+        
+        # Create control panel frame
+        control_frame = ttk.Frame(matrix_frame)
+        control_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
+        
+        # Add thread count control
+        ttk.Label(control_frame, text="Camera Tasks:").pack(side="left", padx=(0, 5))
+        self.thread_count_var = tk.StringVar(value="200")  # Default value
+        thread_count_entry = ttk.Entry(control_frame, textvariable=self.thread_count_var, width=6)
+        thread_count_entry.pack(side="left", padx=(0, 5))
+        
+        # Add apply button
+        apply_button = ttk.Button(control_frame, text="Apply", command=self.update_thread_count)
+        apply_button.pack(side="left")
         
         # Create canvas for matrix display
         self.matrix_canvas = tk.Canvas(matrix_frame, bg='#2b2b2b', highlightthickness=0)
-        self.matrix_canvas.grid(row=0, column=0, sticky="nsew")
+        self.matrix_canvas.grid(row=1, column=0, sticky="nsew")  # Changed from row 0 to 1
         
         # Initialize matrix state
         self.matrix_update_active = False
         self.matrix_photo = None
+        self.matrix_thread = None
+        self.matrix_lock = threading.Lock()
+        self.matrix_queue = queue.Queue(maxsize=1)
+        
+        # Bind canvas resize event
+        self.matrix_canvas.bind('<Configure>', self.on_matrix_canvas_resize)
         
         # Start matrix update thread
-        self.update_matrix_display()
-            
-    def update_matrix_display(self):
-        """Update the matrix display with current camera streams"""
-        # Only update if matrix view is active
-        if not self.matrix_update_active:
-            # Clean up resources when stopping
-            try:
-                from gui.rendermatrix import cleanup_camera_manager
-                cleanup_camera_manager()
-            except ImportError:
-                pass
-            return
-            
-        # Get canvas dimensions
-        canvas_width = self.matrix_canvas.winfo_width()
-        canvas_height = self.matrix_canvas.winfo_height()
+        self.start_matrix_updates()
         
-        if canvas_width <= 1 or canvas_height <= 1:
-            # Canvas not ready yet, try again later
-            self.root.after(100, self.update_matrix_display)
-            return
-        
+    def update_thread_count(self):
+        """Update the number of threads used for camera tasks"""
         try:
-            # Create matrix view using the camera manager
-            matrix_image = render_matrix(canvas_width, canvas_height)
-            
-            if matrix_image is not None:
-                # Convert CV2 image to PIL then to PhotoImage
-                matrix_rgb = cv2.cvtColor(matrix_image, cv2.COLOR_BGR2RGB)
-                pil_image = Image.fromarray(matrix_rgb)
+            new_count = int(self.thread_count_var.get())
+            if new_count < 1:
+                raise ValueError("Thread count must be positive")
                 
-                # Keep reference to prevent garbage collection
-                self.matrix_photo = ImageTk.PhotoImage(pil_image)
-                
-                # Clear canvas and display image
-                self.matrix_canvas.delete("all")
-                self.matrix_canvas.create_image(
-                    canvas_width//2, canvas_height//2,
-                    image=self.matrix_photo,
-                    anchor="center"
-                )
+            # Clean up existing camera manager
+            from gui.rendermatrix import cleanup_camera_manager
+            cleanup_camera_manager()
             
-        except Exception as e:
-            print(f"Matrix display error: {e}")
-            self.matrix_canvas.delete("all")
-            self.matrix_canvas.create_text(
-                canvas_width//2, canvas_height//2,
-                text=f"Display error: {str(e)[:50]}...", 
-                fill="red",
-                font=('Arial', 12),
-                justify="center"
-            )
-        
-        # Schedule next update only if still active
+            # Create new camera manager with updated thread count
+            from gui.rendermatrix import CameraManager
+            global camera_manager
+            camera_manager = CameraManager()
+            camera_manager.connection_semaphore = threading.Semaphore(new_count)
+            camera_manager.active = True
+            camera_manager.load_camera_urls()
+            
+            # Force matrix update by restarting the matrix view
+            self.matrix_update_active = False
+            if self.matrix_thread and self.matrix_thread.is_alive():
+                self.matrix_thread.join(timeout=1.0)
+            self.matrix_update_active = True
+            self.start_matrix_updates()
+            
+        except ValueError as e:
+            messagebox.showerror("Invalid Input", "Please enter a valid positive number for thread count")
+            self.thread_count_var.set("200")  # Reset to default
+            
+    def on_matrix_canvas_resize(self, event):
+        """Handle canvas resize events"""
         if self.matrix_update_active:
-            self.root.after(100, self.update_matrix_display)  # Update more frequently
-    
+            # Force an immediate update when canvas is resized
+            self.update_matrix_display()
+            
+    def start_matrix_updates(self):
+        """Start the matrix update thread"""
+        def matrix_update_worker():
+            while self.matrix_update_active and not self.is_shutting_down:
+                try:
+                    with self.matrix_lock:
+                        # Get canvas dimensions
+                        canvas_width = self.matrix_canvas.winfo_width()
+                        canvas_height = self.matrix_canvas.winfo_height()
+                        
+                        if canvas_width <= 1 or canvas_height <= 1:
+                            time.sleep(0.1)
+                            continue
+                        
+                        # Create matrix view using the camera manager
+                        try:
+                            # Clear any old frames from the queue
+                            while not self.matrix_queue.empty():
+                                try:
+                                    self.matrix_queue.get_nowait()
+                                except queue.Empty:
+                                    break
+                            
+                            # Get new frame
+                            matrix_image = render_matrix(canvas_width, canvas_height)
+                            
+                            if matrix_image is not None and not self.is_shutting_down:
+                                # Convert CV2 image to PIL then to PhotoImage
+                                matrix_rgb = cv2.cvtColor(matrix_image, cv2.COLOR_BGR2RGB)
+                                pil_image = Image.fromarray(matrix_rgb)
+                                
+                                # Put the new frame in the queue
+                                try:
+                                    self.matrix_queue.put_nowait(pil_image)
+                                except queue.Full:
+                                    pass  # Skip this frame if queue is full
+                                
+                                # Update canvas in main thread
+                                if not self.is_shutting_down:
+                                    self.root.after(0, self.update_matrix_canvas)
+                            
+                        except Exception as e:
+                            print(f"Error in render_matrix: {e}")
+                            time.sleep(1)
+                            continue
+                    
+                    # Sleep for a short time to prevent high CPU usage
+                    time.sleep(0.1)
+                    
+                except Exception as e:
+                    print(f"Matrix update error: {e}")
+                    time.sleep(1)  # Wait before retrying
+        
+        # Start matrix update thread
+        self.matrix_thread = threading.Thread(target=matrix_update_worker, daemon=True)
+        self.matrix_thread.start()
+        
+    def update_matrix_canvas(self):
+        """Update the matrix canvas with the current image"""
+        try:
+            with self.matrix_lock:
+                if not self.is_shutting_down:
+                    # Get the latest frame from the queue
+                    try:
+                        pil_image = self.matrix_queue.get_nowait()
+                        # Convert to PhotoImage
+                        self.matrix_photo = ImageTk.PhotoImage(pil_image)
+                        
+                        # Clear canvas and display image
+                        self.matrix_canvas.delete("all")
+                        self.matrix_canvas.create_image(
+                            self.matrix_canvas.winfo_width()//2,
+                            self.matrix_canvas.winfo_height()//2,
+                            image=self.matrix_photo,
+                            anchor="center"
+                        )
+                    except queue.Empty:
+                        pass  # No new frame available
+        except Exception as e:
+            print(f"Error updating matrix canvas: {e}")
+            
     def on_tab_change(self, event):
         """Handle tab changes to manage active views and threads"""
         current_tab = self.notebook.select()
@@ -613,20 +698,29 @@ class MainGUI:
         # Handle matrix view
         if self.active_view == "matrix":
             self.matrix_update_active = True
-            # Force an immediate update
-            self.update_matrix_display()
+            # Start matrix updates if not already running
+            if not self.matrix_thread or not self.matrix_thread.is_alive():
+                self.start_matrix_updates()
         else:
             # Stop matrix updates if switching away
             self.matrix_update_active = False
             # Clear matrix canvas if switching away
             if hasattr(self, 'matrix_canvas'):
                 self.matrix_canvas.delete("all")
+                # Clear the frame queue
+                while not self.matrix_queue.empty():
+                    try:
+                        self.matrix_queue.get_nowait()
+                    except queue.Empty:
+                        break
                 # Force cleanup of any remaining matrix resources
                 try:
                     from gui.rendermatrix import cleanup_camera_manager
                     cleanup_camera_manager()
                 except ImportError:
                     pass
+                except Exception as e:
+                    print(f"Error cleaning up camera manager: {e}")
         
         # Handle list view
         if self.active_view != "list":
@@ -891,7 +985,21 @@ class MainGUI:
 
     def open_move_camera_window(self):
         """Open window for camera movement controls"""
-        MovementControlWindow(self.root)
+        # Get the currently selected camera from the tree
+        selection = self.tree.selection()
+        if not selection:
+            messagebox.showwarning("No Camera Selected", "Please select a camera first.")
+            return
+            
+        item_id = selection[0]
+        if item_id not in self.camera_data:
+            return
+            
+        camera_info = self.camera_data[item_id]
+        ip = camera_info['ip']
+        
+        # Open movement control window
+        MovementGUI(self.root, ip)
 
     def get_ip_info(self):
         """Show IP information in a new window"""
@@ -1274,6 +1382,21 @@ class MainGUI:
             self.matrix_update_active = False
             self.status_checker_active = False
             
+            # Clear the matrix queue
+            while not self.matrix_queue.empty():
+                try:
+                    self.matrix_queue.get_nowait()
+                except queue.Empty:
+                    break
+            
+            # Wait for status checker thread to finish
+            if self.status_checker_thread and self.status_checker_thread.is_alive():
+                self.status_checker_thread.join(timeout=1.0)
+                
+            # Wait for matrix thread to finish
+            if self.matrix_thread and self.matrix_thread.is_alive():
+                self.matrix_thread.join(timeout=1.0)
+            
             # Clean up images
             while not self.image_queue.empty():
                 try:
@@ -1284,15 +1407,18 @@ class MainGUI:
                     pass
             
             # Import and cleanup the camera manager
-            from gui.rendermatrix import cleanup_camera_manager
-            cleanup_camera_manager()
+            try:
+                from gui.rendermatrix import cleanup_camera_manager
+                cleanup_camera_manager()
+            except ImportError:
+                pass
+            except Exception as e:
+                print(f"Error cleaning up camera manager: {e}")
             
             # Shutdown thread pool
             if hasattr(self, 'thread_pool'):
                 self.thread_pool.shutdown(wait=False)
             
-        except ImportError:
-            pass
         except Exception as e:
             print(f"Error during cleanup: {e}")
         
