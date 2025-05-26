@@ -21,6 +21,7 @@ from gui.focusedmapgui import FocusedMapWindow
 from concurrent.futures import ThreadPoolExecutor
 import queue
 import requests
+from gui.aboutgui import AboutGUI
 
 ip_list_file = settings.ip_list_file
 
@@ -338,7 +339,8 @@ class MainGUI:
         messagebox.showinfo("Settings", "Network configuration dialog would open here")
     
     def show_about(self):
-        messagebox.showinfo("About", "Main Application v1.0\nA comprehensive GUI application")
+        """Show about window"""
+        AboutGUI(self.root)
 
     def create_map_view(self):
         map_frame = ttk.Frame(self.notebook)
