@@ -22,7 +22,7 @@ stream_links_file = os.path.join(DATA_DIR, 'stream_links.txt')
 streamables_file = os.path.join(DATA_DIR, 'streamables.txt')
 
 # Version
-overseeversion = "0.2.13"
+overseeversion = "0.2.17"
 
 # Database paths
 ip_info_db = os.path.join(DATA_DIR, 'ip_info.db')
