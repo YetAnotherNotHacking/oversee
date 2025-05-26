@@ -36,6 +36,8 @@ class MainGUI:
         self.matrix_update_active = False
         self.preview_active = False
         self.current_preview_thread = None
+        self.status_checker_active = True
+        self.is_shutting_down = False
         
         # Initialize thread pool
         self.thread_pool = ThreadPoolExecutor(max_workers=4)
@@ -76,6 +78,27 @@ class MainGUI:
         self.style.map('Treeview',
             background=[('selected', '#4b6eaf')],
             foreground=[('selected', '#ffffff')]
+        )
+        
+        # Configure entry and combobox styles
+        self.style.configure('TEntry',
+            fieldbackground='#3c3f41',
+            foreground='#ffffff',
+            insertcolor='#ffffff'
+        )
+        
+        self.style.configure('TCombobox',
+            fieldbackground='#3c3f41',
+            background='#3c3f41',
+            foreground='#ffffff',
+            arrowcolor='#ffffff'
+        )
+        
+        # Configure combobox popup list
+        self.style.map('TCombobox',
+            fieldbackground=[('readonly', '#3c3f41')],
+            selectbackground=[('readonly', '#4b6eaf')],
+            selectforeground=[('readonly', '#ffffff')]
         )
         
         # Configure root window
@@ -174,7 +197,7 @@ class MainGUI:
     def start_camera_status_checker(self):
         """Start background thread to check camera statuses"""
         def status_checker():
-            while True:
+            while self.status_checker_active and not self.is_shutting_down:
                 try:
                     # Get all cameras from database
                     conn = self.get_thread_db_connection()
@@ -184,20 +207,31 @@ class MainGUI:
                     conn.close()
                     
                     for (ip,) in cameras:
+                        if not self.status_checker_active or self.is_shutting_down:
+                            break
                         # Submit camera check to thread pool
-                        self.thread_pool.submit(self.check_camera_status, ip, ip)
+                        if not self.thread_pool._shutdown and not self.is_shutting_down:
+                            self.thread_pool.submit(self.check_camera_status, ip, ip)
                     
                     # Wait before next check
-                    time.sleep(300)  # Check every 5 minutes
+                    for _ in range(300):  # Check every 5 minutes, but check status every second
+                        if not self.status_checker_active or self.is_shutting_down:
+                            break
+                        time.sleep(1)
                 except Exception as e:
                     print(f"Error in camera status checker: {e}")
-                    time.sleep(60)  # Wait a minute before retrying
+                    if self.status_checker_active and not self.is_shutting_down:
+                        time.sleep(60)  # Wait a minute before retrying
         
         # Start status checker in thread pool
-        self.thread_pool.submit(status_checker)
+        if not self.thread_pool._shutdown and not self.is_shutting_down:
+            self.thread_pool.submit(status_checker)
 
     def check_camera_status(self, item_id, ip):
         """Check if camera is accessible and update status"""
+        if self.is_shutting_down or not hasattr(self, 'thread_pool') or self.thread_pool._shutdown:
+            return
+            
         try:
             from backend.cameradown import capture_single_frame, default_stream_params
             
@@ -240,15 +274,18 @@ class MainGUI:
                 )
                 
                 # Update tree if item exists
-                self.tree.after(0, lambda: self.update_tree_item(item_id, ip, status))
+                if not self.is_shutting_down:
+                    self.tree.after(0, lambda: self.update_tree_item(item_id, ip, status))
             else:
                 self.update_camera_status(ip=ip, status="Offline")
-                self.tree.after(0, lambda: self.update_tree_item(item_id, ip, "Offline"))
+                if not self.is_shutting_down:
+                    self.tree.after(0, lambda: self.update_tree_item(item_id, ip, "Offline"))
                 
         except Exception as e:
             print(f"Error checking camera status: {e}")
             self.update_camera_status(ip=ip, status="Error")
-            self.tree.after(0, lambda: self.update_tree_item(item_id, ip, "Error"))
+            if not self.is_shutting_down:
+                self.tree.after(0, lambda: self.update_tree_item(item_id, ip, "Error"))
         
     def setup_gui(self):
         # Create menu bar
@@ -326,17 +363,36 @@ class MainGUI:
             
             style_var = tk.StringVar(value="OpenStreetMap")
             style_combo = ttk.Combobox(control_frame, textvariable=style_var, state="readonly")
-            style_combo['values'] = ("OpenStreetMap", "Google normal", "Google satellite")
+            style_combo['values'] = (
+                "OpenStreetMap",
+                "Google normal",
+                "Google satellite",
+                "Painting style",
+                "Black and white",
+                "Hiking map",
+                "No labels",
+                "Swiss topo"
+            )
             style_combo.grid(row=0, column=1, padx=5, pady=5)
             
             def change_map_style(event=None):
                 style = style_var.get()
                 if style == "OpenStreetMap":
-                    map_widget.set_tile_server("https://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}&s=Ga", max_zoom=22)
+                    map_widget.set_tile_server("https://a.tile.openstreetmap.org/{z}/{x}/{y}.png")
                 elif style == "Google normal":
                     map_widget.set_tile_server("https://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}&s=Ga", max_zoom=22)
                 elif style == "Google satellite":
                     map_widget.set_tile_server("https://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}&s=Ga", max_zoom=22)
+                elif style == "Painting style":
+                    map_widget.set_tile_server("http://c.tile.stamen.com/watercolor/{z}/{x}/{y}.png")
+                elif style == "Black and white":
+                    map_widget.set_tile_server("http://a.tile.stamen.com/toner/{z}/{x}/{y}.png")
+                elif style == "Hiking map":
+                    map_widget.set_tile_server("https://tiles.wmflabs.org/hikebike/{z}/{x}/{y}.png")
+                elif style == "No labels":
+                    map_widget.set_tile_server("https://tiles.wmflabs.org/osm-no-labels/{z}/{x}/{y}.png")
+                elif style == "Swiss topo":
+                    map_widget.set_tile_server("https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.pixelkarte-farbe/default/current/3857/{z}/{x}/{y}.jpeg")
             
             style_combo.bind('<<ComboboxSelected>>', change_map_style)
             
@@ -393,21 +449,38 @@ class MainGUI:
                         
                         # Add marker in main thread
                         def add_marker(ip=ip, lat=lat, lon=lon, text=marker_text):
-                            marker = map_widget.set_marker(lat, lon, text=text)
-                            
-                            # Add click event
-                            def on_marker_click(event, ip=ip):
+                            # Create click handler
+                            def click_marker_event(marker):
+                                print("marker clicked:", marker.text)
+                                # Extract base IP from marker text
+                                base_ip = marker.text.split('\n')[0]  # Get first line which is the IP
+                                
                                 # Switch to list view and select the IP
                                 self.notebook.select(2)  # Switch to list view tab
+                                
+                                # Find and select the item in the tree
                                 for item in self.tree.get_children():
-                                    if self.tree.item(item)['values'][0] == ip:
+                                    item_ip = self.tree.item(item)['values'][0]
+                                    # Compare base IPs (without endpoints)
+                                    item_base_ip = item_ip.split('/')[0] if '/' in item_ip else item_ip
+                                    item_base_ip = item_base_ip.split(':')[0] if ':' in item_base_ip else item_base_ip
+                                    
+                                    if item_base_ip == base_ip:
                                         self.tree.selection_set(item)
                                         self.tree.see(item)
+                                        # Trigger the selection event to show camera preview
+                                        self.on_item_select(None)
                                         break
                             
-                            # Bind click event to the marker's canvas item
+                            # Create marker with click handler
+                            marker = map_widget.set_marker(lat, lon, text=text, command=click_marker_event)
+                            
+                            # Add hover effect
                             if hasattr(marker, 'canvas_item'):
-                                map_widget.canvas.tag_bind(marker.canvas_item, '<Button-1>', on_marker_click)
+                                map_widget.canvas.tag_bind(marker.canvas_item, '<Enter>', 
+                                    lambda e: map_widget.canvas.itemconfig(marker.canvas_item, fill='red'))
+                                map_widget.canvas.tag_bind(marker.canvas_item, '<Leave>', 
+                                    lambda e: map_widget.canvas.itemconfig(marker.canvas_item, fill='blue'))
                         
                         # Schedule marker addition in main thread
                         self.root.after(0, lambda: add_marker())
@@ -466,6 +539,10 @@ class MainGUI:
         self.matrix_canvas = tk.Canvas(matrix_frame, bg='#2b2b2b', highlightthickness=0)
         self.matrix_canvas.grid(row=0, column=0, sticky="nsew")
         
+        # Initialize matrix state
+        self.matrix_update_active = False
+        self.matrix_photo = None
+        
         # Start matrix update thread
         self.update_matrix_display()
             
@@ -523,154 +600,8 @@ class MainGUI:
         
         # Schedule next update only if still active
         if self.matrix_update_active:
-            self.root.after(2000, self.update_matrix_display)
-        
-    def cleanup_on_close(self):
-        """Clean up resources when closing the application"""
-        try:
-            # Stop all background operations
-            self.preview_active = False
-            self.matrix_update_active = False
-            
-            # Shutdown thread pool
-            self.thread_pool.shutdown(wait=False)
-            
-            # Clean up images
-            while not self.image_queue.empty():
-                try:
-                    img = self.image_queue.get_nowait()
-                    if hasattr(img, '_PhotoImage__photo'):
-                        del img._PhotoImage__photo
-                except:
-                    pass
-            
-            # Import and cleanup the camera manager
-            from gui.rendermatrix import cleanup_camera_manager
-            cleanup_camera_manager()
-        except ImportError:
-            pass
-        
-        # Destroy the root window
-        self.root.destroy()
-
-    def create_list_view(self):
-        list_frame = ttk.Frame(self.notebook)
-        self.notebook.add(list_frame, text="List View")
-        
-        # Bind tab change event
-        self.notebook.bind('<<NotebookTabChanged>>', self.on_tab_change)
-        
-        list_frame.grid_rowconfigure(1, weight=1)  # Changed to 1 to make room for search
-        list_frame.grid_columnconfigure(0, weight=1)
-        list_frame.grid_columnconfigure(1, weight=2)
-        
-        # Add search frame at the top
-        search_frame = ttk.Frame(list_frame)
-        search_frame.grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 5))
-        
-        # Search label and entry
-        ttk.Label(search_frame, text="Search:").pack(side="left", padx=(0, 5))
-        self.search_var = tk.StringVar()
-        self.search_var.trace('w', self.on_search_change)  # Bind to search changes
-        search_entry = ttk.Entry(search_frame, textvariable=self.search_var, width=40)
-        search_entry.pack(side="left", fill="x", expand=True)
-        
-        # Add reset button
-        reset_button = ttk.Button(search_frame, text="Reset List", command=self.reset_list_view)
-        reset_button.pack(side="left", padx=5)
-        
-        # Left panel - scrollable list
-        left_panel = ttk.Frame(list_frame)
-        left_panel.grid(row=1, column=0, sticky="nsew", padx=(10, 5), pady=10)
-        left_panel.grid_rowconfigure(0, weight=1)
-        left_panel.grid_columnconfigure(0, weight=1)
-        
-        # Create treeview for list items
-        self.tree = ttk.Treeview(left_panel, columns=('Name', 'Status'), show='tree headings')
-        self.tree.heading('#0', text='ID')
-        self.tree.heading('Name', text='IP Address')
-        self.tree.heading('Status', text='Status')
-        
-        self.tree.column('#0', width=50)
-        self.tree.column('Name', width=150)
-        self.tree.column('Status', width=100)
-        
-        # Configure status colors
-        self.tree.tag_configure('online', background='#1a472a', foreground='#ffffff')  # Dark green
-        self.tree.tag_configure('offline', background='#4a1a1a', foreground='#ffffff')  # Dark red
-        self.tree.tag_configure('error', background='#4a3a1a', foreground='#ffffff')    # Dark yellow
-        self.tree.tag_configure('unknown', background='#2b2b2b', foreground='#ffffff')  # Dark gray
-        
-        # Initialize camera data storage
-        self.camera_data = {}
-        self.current_preview_thread = None
-        self.preview_active = False
-        
-        # Initialize active view tracking
-        self.active_view = "list"
-        self.matrix_update_active = False
-        
-        # Load IP addresses and populate treeview
-        self.load_ip_addresses()
-        
-        # Scrollbar for treeview
-        tree_scroll = ttk.Scrollbar(left_panel, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=tree_scroll.set)
-        
-        self.tree.grid(row=0, column=0, sticky="nsew")
-        tree_scroll.grid(row=0, column=1, sticky="ns")
-        
-        # Bind selection event
-        self.tree.bind('<<TreeviewSelect>>', self.on_item_select)
-        
-        # Right panel - details view
-        right_panel = ttk.Frame(list_frame)
-        right_panel.grid(row=1, column=1, sticky="nsew", padx=(5, 10), pady=10)
-        right_panel.grid_rowconfigure(1, weight=1)
-        right_panel.grid_columnconfigure(0, weight=1)
-        
-        # Image display area
-        self.image_frame = ttk.LabelFrame(right_panel, text="Camera Preview", padding=10)
-        self.image_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        
-        # Placeholder for image
-        self.image_label = ttk.Label(self.image_frame, text="Select a camera to view preview", 
-                                width=40, anchor='center')
-        self.image_label.grid(row=0, column=0, pady=20, ipady=50)
-        
-        # Camera controls frame
-        controls_frame = ttk.LabelFrame(right_panel, text="Camera Controls", padding=10)
-        controls_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
-        
-        # Create buttons
-        ttk.Button(controls_frame, text="Favourite Camera", 
-                  command=self.favourite_camera).grid(row=0, column=0, padx=5, pady=5)
-        ttk.Button(controls_frame, text="Move Camera", 
-                  command=self.open_move_camera_window).grid(row=0, column=1, padx=5, pady=5)
-        ttk.Button(controls_frame, text="Open in Browser", 
-                  command=self.open_camera_in_browser).grid(row=0, column=2, padx=5, pady=5)
-        ttk.Button(controls_frame, text="Get IPINFO", 
-                  command=self.get_ip_info).grid(row=0, column=3, padx=5, pady=5)
-        ttk.Button(controls_frame, text="Show on Map", 
-                  command=self.show_camera_on_map).grid(row=0, column=4, padx=5, pady=5)
-        
-        # Properties frame
-        self.properties_frame = ttk.LabelFrame(right_panel, text="Properties", padding=10)
-        self.properties_frame.grid(row=2, column=0, sticky="nsew", pady=(0, 10))
-        
-        # Properties labels
-        self.prop_name = ttk.Label(self.properties_frame, text="IP Address: Select a camera", font=('Arial', 10, 'bold'))
-        self.prop_name.grid(row=0, column=0, sticky="w", pady=2)
-        
-        self.prop_location = ttk.Label(self.properties_frame, text="Location: -")
-        self.prop_location.grid(row=1, column=0, sticky="w", pady=2)
-        
-        self.prop_status = ttk.Label(self.properties_frame, text="Status: -")
-        self.prop_status.grid(row=2, column=0, sticky="w", pady=2)
-        
-        self.prop_resolution = ttk.Label(self.properties_frame, text="Resolution: -")
-        self.prop_resolution.grid(row=3, column=0, sticky="w", pady=2)
-
+            self.root.after(100, self.update_matrix_display)  # Update more frequently
+    
     def on_tab_change(self, event):
         """Handle tab changes to manage active views and threads"""
         current_tab = self.notebook.select()
@@ -682,6 +613,8 @@ class MainGUI:
         # Handle matrix view
         if self.active_view == "matrix":
             self.matrix_update_active = True
+            # Force an immediate update
+            self.update_matrix_display()
         else:
             # Stop matrix updates if switching away
             self.matrix_update_active = False
@@ -1068,9 +1001,11 @@ class MainGUI:
         camera_info = self.camera_data[item_id]
         ip = camera_info['ip']
         
-        # Extract base IP without endpoint or port
-        base_ip = ip.split('/')[0] if '/' in ip else ip
-        base_ip = base_ip.split(':')[0] if ':' in base_ip else base_ip
+        # Extract IP with port but without endpoint
+        if '/' in ip:
+            base_ip = ip.split('/')[0]
+        else:
+            base_ip = ip
         
         # Open in browser
         import webbrowser
@@ -1165,6 +1100,204 @@ class MainGUI:
             else:
                 # Hide non-matching items
                 self.tree.detach(item)
+
+    def open_camera_stream(self):
+        """Open the selected camera's stream in a new window"""
+        selection = self.tree.selection()
+        if not selection:
+            messagebox.showwarning("No Selection", "Please select a camera first.")
+            return
+            
+        item_id = selection[0]
+        if item_id not in self.camera_data:
+            return
+            
+        camera_info = self.camera_data[item_id]
+        ip = camera_info['ip']
+        
+        # Open stream in new window
+        from gui.focusedstreamgui import FocusedStreamWindow
+        FocusedStreamWindow(ip)
+
+    def open_in_ipinfo(self):
+        """Open the selected camera's IP in IPINFO"""
+        selection = self.tree.selection()
+        if not selection:
+            messagebox.showwarning("No Selection", "Please select a camera first.")
+            return
+            
+        item_id = selection[0]
+        if item_id not in self.camera_data:
+            return
+            
+        camera_info = self.camera_data[item_id]
+        ip = camera_info['ip']
+        
+        # Extract base IP without port or endpoint
+        base_ip = ip.split('/')[0] if '/' in ip else ip
+        base_ip = base_ip.split(':')[0] if ':' in base_ip else base_ip
+        
+        # Open in browser
+        import webbrowser
+        webbrowser.open(f"https://ipinfo.io/{base_ip}")
+
+    def create_list_view(self):
+        list_frame = ttk.Frame(self.notebook)
+        self.notebook.add(list_frame, text="List View")
+        
+        # Bind tab change event
+        self.notebook.bind('<<NotebookTabChanged>>', self.on_tab_change)
+        
+        list_frame.grid_rowconfigure(1, weight=1)  # Changed to 1 to make room for search
+        list_frame.grid_columnconfigure(0, weight=1)
+        list_frame.grid_columnconfigure(1, weight=2)
+        
+        # Add search frame at the top
+        search_frame = ttk.Frame(list_frame)
+        search_frame.grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 5))
+        
+        # Search label and entry
+        ttk.Label(search_frame, text="Search:").pack(side="left", padx=(0, 5))
+        self.search_var = tk.StringVar()
+        self.search_var.trace('w', self.on_search_change)  # Bind to search changes
+        search_entry = ttk.Entry(search_frame, textvariable=self.search_var, width=40)
+        search_entry.pack(side="left", fill="x", expand=True)
+        
+        # Add reset button
+        reset_button = ttk.Button(search_frame, text="Reset List", command=self.reset_list_view)
+        reset_button.pack(side="left", padx=5)
+        
+        # Left panel - scrollable list
+        left_panel = ttk.Frame(list_frame)
+        left_panel.grid(row=1, column=0, sticky="nsew", padx=(10, 5), pady=10)
+        left_panel.grid_rowconfigure(0, weight=1)
+        left_panel.grid_columnconfigure(0, weight=1)
+        
+        # Create treeview for list items
+        self.tree = ttk.Treeview(left_panel, columns=('Name', 'Status'), show='tree headings')
+        self.tree.heading('#0', text='ID')
+        self.tree.heading('Name', text='IP Address')
+        self.tree.heading('Status', text='Status')
+        
+        self.tree.column('#0', width=50)
+        self.tree.column('Name', width=150)
+        self.tree.column('Status', width=100)
+        
+        # Configure status colors
+        self.tree.tag_configure('online', background='#1a472a', foreground='#ffffff')  # Dark green
+        self.tree.tag_configure('offline', background='#4a1a1a', foreground='#ffffff')  # Dark red
+        self.tree.tag_configure('error', background='#4a3a1a', foreground='#ffffff')    # Dark yellow
+        self.tree.tag_configure('unknown', background='#2b2b2b', foreground='#ffffff')  # Dark gray
+        
+        # Initialize camera data storage
+        self.camera_data = {}
+        self.current_preview_thread = None
+        self.preview_active = False
+        
+        # Initialize active view tracking
+        self.active_view = "list"
+        self.matrix_update_active = False
+        
+        # Load IP addresses and populate treeview
+        self.load_ip_addresses()
+        
+        # Scrollbar for treeview
+        tree_scroll = ttk.Scrollbar(left_panel, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=tree_scroll.set)
+        
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        tree_scroll.grid(row=0, column=1, sticky="ns")
+        
+        # Bind selection event
+        self.tree.bind('<<TreeviewSelect>>', self.on_item_select)
+        
+        # Right panel - details view
+        right_panel = ttk.Frame(list_frame)
+        right_panel.grid(row=1, column=1, sticky="nsew", padx=(5, 10), pady=10)
+        right_panel.grid_rowconfigure(1, weight=1)
+        right_panel.grid_columnconfigure(0, weight=1)
+        
+        # Image display area
+        self.image_frame = ttk.LabelFrame(right_panel, text="Camera Preview", padding=10)
+        self.image_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        
+        # Placeholder for image
+        self.image_label = ttk.Label(self.image_frame, text="Select a camera to view preview", 
+                                width=40, anchor='center')
+        self.image_label.grid(row=0, column=0, pady=20, ipady=50)
+        
+        # Camera controls frame
+        controls_frame = ttk.LabelFrame(right_panel, text="Camera Controls", padding=10)
+        controls_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        
+        # Create buttons
+        ttk.Button(controls_frame, text="Favourite Camera", 
+                  command=self.favourite_camera).grid(row=0, column=0, padx=5, pady=5)
+        ttk.Button(controls_frame, text="Move Camera", 
+                  command=self.open_move_camera_window).grid(row=0, column=1, padx=5, pady=5)
+        ttk.Button(controls_frame, text="Open in Browser", 
+                  command=self.open_camera_in_browser).grid(row=0, column=2, padx=5, pady=5)
+        ttk.Button(controls_frame, text="Get IPINFO", 
+                  command=self.get_ip_info).grid(row=0, column=3, padx=5, pady=5)
+        ttk.Button(controls_frame, text="Show on Map", 
+                  command=self.show_camera_on_map).grid(row=0, column=4, padx=5, pady=5)
+        ttk.Button(controls_frame, text="Open Stream", 
+                  command=self.open_camera_stream).grid(row=0, column=5, padx=5, pady=5)
+        ttk.Button(controls_frame, text="Open in IPINFO", 
+                  command=self.open_in_ipinfo).grid(row=0, column=6, padx=5, pady=5)
+        
+        # Properties frame
+        self.properties_frame = ttk.LabelFrame(right_panel, text="Properties", padding=10)
+        self.properties_frame.grid(row=2, column=0, sticky="nsew", pady=(0, 10))
+        
+        # Properties labels
+        self.prop_name = ttk.Label(self.properties_frame, text="IP Address: Select a camera", font=('Arial', 10, 'bold'))
+        self.prop_name.grid(row=0, column=0, sticky="w", pady=2)
+        
+        self.prop_location = ttk.Label(self.properties_frame, text="Location: -")
+        self.prop_location.grid(row=1, column=0, sticky="w", pady=2)
+        
+        self.prop_status = ttk.Label(self.properties_frame, text="Status: -")
+        self.prop_status.grid(row=2, column=0, sticky="w", pady=2)
+        
+        self.prop_resolution = ttk.Label(self.properties_frame, text="Resolution: -")
+        self.prop_resolution.grid(row=3, column=0, sticky="w", pady=2)
+
+    def cleanup_on_close(self):
+        """Clean up resources when closing the application"""
+        try:
+            # Set shutdown flag first
+            self.is_shutting_down = True
+            
+            # Stop all background operations
+            self.preview_active = False
+            self.matrix_update_active = False
+            self.status_checker_active = False
+            
+            # Clean up images
+            while not self.image_queue.empty():
+                try:
+                    img = self.image_queue.get_nowait()
+                    if hasattr(img, '_PhotoImage__photo'):
+                        del img._PhotoImage__photo
+                except:
+                    pass
+            
+            # Import and cleanup the camera manager
+            from gui.rendermatrix import cleanup_camera_manager
+            cleanup_camera_manager()
+            
+            # Shutdown thread pool
+            if hasattr(self, 'thread_pool'):
+                self.thread_pool.shutdown(wait=False)
+            
+        except ImportError:
+            pass
+        except Exception as e:
+            print(f"Error during cleanup: {e}")
+        
+        # Destroy the root window
+        self.root.destroy()
 
 
 def runmaingui():
