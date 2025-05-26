@@ -103,7 +103,7 @@ class CameraManager:
         except Exception as e:
             print(f"Error getting online cameras: {e}")
             return []
-    
+
     def should_poll_jpeg(self, url):
         """Check if URL should be polled as JPEG stream"""
         lower = url.lower()
@@ -154,7 +154,7 @@ class CameraManager:
             self.camera_urls = list(dict.fromkeys(self.camera_urls))
             
             print(f"Loaded {len(self.camera_urls)} unique camera URLs")
-            
+                
         except Exception as e:
             print(f"Error loading camera URLs: {e}")
             self.camera_urls = []
@@ -227,7 +227,7 @@ class CameraManager:
                             # Mark success
                             with self.lock:
                                 self.camera_metadata[camera_url]["last_success"] = time.time()
-                            
+        
                             # Resize larger frames
                             if frame.shape[0] > 720 or frame.shape[1] > 1280:  # Reduced from 1080/1920
                                 if frame.shape[1] > frame.shape[0]:  # Landscape
