@@ -30,7 +30,16 @@ class FocusedMapWindow:
         
         self.style_var = tk.StringVar(value="OpenStreetMap")
         style_combo = ttk.Combobox(control_frame, textvariable=self.style_var, state="readonly")
-        style_combo['values'] = ("OpenStreetMap", "Google normal", "Google satellite")
+        style_combo['values'] = (
+            "OpenStreetMap",
+            "Google normal",
+            "Google satellite",
+            "Painting style",
+            "Black and white",
+            "Hiking map",
+            "No labels",
+            "Swiss topo"
+        )
         style_combo.pack(side="left", padx=5)
         
         # Bind style change
@@ -57,11 +66,21 @@ class FocusedMapWindow:
         """Change the map style"""
         style = self.style_var.get()
         if style == "OpenStreetMap":
-            self.map_widget.set_tile_server("https://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}&s=Ga", max_zoom=22)
+            self.map_widget.set_tile_server("https://a.tile.openstreetmap.org/{z}/{x}/{y}.png")
         elif style == "Google normal":
             self.map_widget.set_tile_server("https://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}&s=Ga", max_zoom=22)
         elif style == "Google satellite":
             self.map_widget.set_tile_server("https://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}&s=Ga", max_zoom=22)
+        elif style == "Painting style":
+            self.map_widget.set_tile_server("http://c.tile.stamen.com/watercolor/{z}/{x}/{y}.png")
+        elif style == "Black and white":
+            self.map_widget.set_tile_server("http://a.tile.stamen.com/toner/{z}/{x}/{y}.png")
+        elif style == "Hiking map":
+            self.map_widget.set_tile_server("https://tiles.wmflabs.org/hikebike/{z}/{x}/{y}.png")
+        elif style == "No labels":
+            self.map_widget.set_tile_server("https://tiles.wmflabs.org/osm-no-labels/{z}/{x}/{y}.png")
+        elif style == "Swiss topo":
+            self.map_widget.set_tile_server("https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.pixelkarte-farbe/default/current/3857/{z}/{x}/{y}.jpeg")
     
     def load_camera_location(self, ip):
         """Load camera location from database and display on map"""
@@ -87,10 +106,29 @@ class FocusedMapWindow:
                 
                 # Add marker
                 marker_text = f"{base_ip}\n{city}, {country}"
-                marker = self.map_widget.set_marker(lat, lon, text=marker_text)
+                
+                # Create a click handler for the marker
+                def click_marker_event(marker):
+                    print("marker clicked:", marker.text)
+                    # Toggle the circle visibility
+                    if hasattr(self, 'circle'):
+                        if self.circle.is_hidden:
+                            self.circle.hide(False)
+                        else:
+                            self.circle.hide(True)
+                
+                # Create the marker with click handler
+                marker = self.map_widget.set_marker(lat, lon, text=marker_text, command=click_marker_event)
                 
                 # Add a small circle around the marker to make it more visible
-                self.map_widget.set_circle(lat, lon, 1000, fill_color="red", outline_color="red", border_width=2, opacity=0.3)
+                self.circle = self.map_widget.set_circle(lat, lon, 1000, fill_color="red", outline_color="red", border_width=2, opacity=0.3)
+                
+                # Add hover effect to marker
+                if hasattr(marker, 'canvas_item'):
+                    self.map_widget.canvas.tag_bind(marker.canvas_item, '<Enter>', 
+                        lambda e: self.map_widget.canvas.itemconfig(marker.canvas_item, fill='red'))
+                    self.map_widget.canvas.tag_bind(marker.canvas_item, '<Leave>', 
+                        lambda e: self.map_widget.canvas.itemconfig(marker.canvas_item, fill='blue'))
             else:
                 # If no location data, center on (0,0) and show message
                 self.map_widget.set_position(0, 0)
