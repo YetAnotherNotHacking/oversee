@@ -127,13 +127,6 @@ class MainGUI:
         # Initialize camera data
         self.camera_data = {}
         
-        # Initialize group data
-        self.group_data = [
-            {"id": 101, "name": "Security Cameras", "count": 0, "location": "All Locations", "status": "Monitoring"},
-            {"id": 102, "name": "Public Cameras", "count": 0, "location": "Public Access", "status": "Monitoring"},
-            {"id": 103, "name": "Private Cameras", "count": 0, "location": "Restricted", "status": "Monitoring"}
-        ]
-        
         self.setup_gui()
         self.update_system_info()
         
