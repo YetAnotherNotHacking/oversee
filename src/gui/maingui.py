@@ -339,10 +339,6 @@ class MainGUI:
         menubar.add_cascade(label="Documentation", menu=docs_menu)
         docs_menu.add_command(label="View Types", command=self.openviewsdocumentation)
 
-
-
-
-    
     def open_preferences(self):
         """Open the preferences window"""
         SettingsWindow(self.root)
