@@ -60,9 +60,12 @@ oversee-main/
 ├── prepforcommit.sh                  # OLD DO NOT USE IT
 ├── .gitignore                        # ... Obv its git ignore?
 ├── src/
+│   │   ├── maingui.py                # Main GUI implementation
 │   ├── gui/                          # All GUI related code
 │   │   ├── maingui.py                # Main GUI implementation
-│   │   ├── settingsgui.py            # Settings window
+│   │   ├── aboutgui.py               # Fancy about menu
+│   │   ├── focusedstreamgui.py       # Open stream in new window
+│   │   ├── settingsgui.py            # Settigs window
 │   │   ├── initgui.py                # Loading menu
 │   │   ├── movementgui.py            # Camera movement remote
 │   │   ├── focusedmapgui.py          # Focused map view "view on map" in list view
