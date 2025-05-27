@@ -111,13 +111,16 @@ class MainGUI:
         # Initialize database
         self.init_database()
         
-        # Apply logo
+        # Apply logo from the remote repository
         try:
-            ico = Image.open('assets/logo.png')
+            url = "https://raw.githubusercontent.com/YetAnotherNotHacking/oversee/refs/heads/main/assets/logo.png"
+            with urllib.request.urlopen(url) as response:
+                data = response.read()
+            ico = Image.open(BytesIO(data))
             photo = ImageTk.PhotoImage(ico)
             self.root.wm_iconphoto(False, photo)
-        except:
-            print("Failed to load app icon, something might be up with your environment")
+        except Exception as e:
+            print("Failed to load app icon from URL:", e)
             pass
 
         # Configure grid weights for resizing
@@ -138,11 +141,9 @@ class MainGUI:
         db_path = settings.cameras_db
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         
-        # Create initial connection to set up database
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
-        # Create cameras table if it doesn't exist
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS cameras (
                 ip TEXT PRIMARY KEY,
@@ -329,7 +330,7 @@ class MainGUI:
         SettingsWindow(self.root)
     
     def open_network_config(self):
-        messagebox.showinfo("Settings", "Network configuration dialog would open here")
+        messagebox.showinfo("Settings", "Network configuration has not been fully implemented.")
     
     def show_about(self):
         """Show about window"""
