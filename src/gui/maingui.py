@@ -15,15 +15,20 @@ import os
 import gui
 import settings
 import numpy as np
+from documentationmd.views import documentationviews
 from gui.movementgui import MovementGUI
 from gui.settingsgui import SettingsWindow
 from gui.focusedmapgui import FocusedMapWindow
+from gui.markdownhelpgui import show_markdown_docs
 from concurrent.futures import ThreadPoolExecutor
 import queue
 import requests
 from gui.aboutgui import AboutGUI
 
 ip_list_file = settings.ip_list_file
+
+# Documentations
+viewtypemarkdown = documentationviews
 
 class MainGUI:
     def __init__(self, root):
@@ -307,7 +312,11 @@ class MainGUI:
         
         # Create status bar
         self.create_status_bar()
-        
+            
+    def openviewsdocumentation(input):
+        title = f"OverSee v{settings.overseeversion} Documentation"
+        show_markdown_docs(viewtypemarkdown, title=title)
+
     def create_menu_bar(self):
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
@@ -324,6 +333,15 @@ class MainGUI:
         advanced_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Advanced", menu=advanced_menu)
         advanced_menu.add_command(label="Reinit all", command=self.reinit_all)
+
+        # Documentation Dropdown
+        docs_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Documentation", menu=docs_menu)
+        docs_menu.add_command(label="View Types", command=self.openviewsdocumentation)
+
+
+
+
     
     def open_preferences(self):
         """Open the preferences window"""
