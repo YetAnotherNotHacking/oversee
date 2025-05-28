@@ -7,3 +7,4 @@ pyautogui
 pynput
 folium
 tkintermapview
+appdirs
