@@ -7,6 +7,7 @@ define('DB_USER', 'seetheworld');
 define('DB_PASS', 'bruh');
 
 // Security Configuration
+// Free cookie to anyone that guesses this insanely secure pw.
 define('ADMIN_PASSWORD_HASH', '30a831bfc93a7ee894e6408c3ffe226a');
 
 // API Keys
