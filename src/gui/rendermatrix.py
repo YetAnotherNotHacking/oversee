@@ -196,7 +196,7 @@ class CameraManager:
         """Read camera stream and update frames dictionary"""
         if self.is_shutting_down:
             return
-            
+        
         # Initialize metadata
         with self.lock:
             if camera_url not in self.camera_metadata:

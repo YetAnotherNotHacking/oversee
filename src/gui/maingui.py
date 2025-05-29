@@ -24,6 +24,7 @@ from concurrent.futures import ThreadPoolExecutor
 import queue
 import requests
 from gui.aboutgui import AboutGUI
+from gui.adddeviceiotgui import AddDeviceIoTDialog
 
 ip_list_file = settings.ip_list_file
 
@@ -33,7 +34,7 @@ viewtypemarkdown = documentationviews
 class MainGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title(f"SilverFlag | OVERSEE Worldwide Viewer v{settings.overseeversion}")
+        self.root.title(f"SilverFlag | OVERSEE Device Manager v{settings.overseeversion}")
         self.root.geometry("1200x800")
         self.root.minsize(800, 600)
         
@@ -301,54 +302,285 @@ class MainGUI:
         main_frame.grid_rowconfigure(0, weight=1)
         main_frame.grid_columnconfigure(0, weight=1)
         
-        # Create notebook for tabs
-        self.notebook = ttk.Notebook(main_frame)
-        self.notebook.grid(row=0, column=0, sticky="nsew")
+        # Create main notebook for categories
+        self.main_notebook = ttk.Notebook(main_frame)
+        self.main_notebook.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
         
-        # Create tabs
+        # Create category tabs
+        self.create_cameras_tab()
+        self.create_printers_tab()
+        self.create_iot_tab()
+        
+        # Create status bar
+        self.create_status_bar()
+        
+    def create_cameras_tab(self):
+        """Create the Cameras tab with all camera-related functionality"""
+        cameras_frame = ttk.Frame(self.main_notebook)
+        self.main_notebook.add(cameras_frame, text="Cameras")
+        
+        # Configure grid for cameras frame
+        cameras_frame.grid_rowconfigure(0, weight=1)
+        cameras_frame.grid_columnconfigure(0, weight=1)
+        
+        # Create notebook for camera views
+        self.notebook = ttk.Notebook(cameras_frame)
+        self.notebook.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        
+        # Create camera view tabs
         self.create_map_view()
         self.create_matrix_view()
         self.create_list_view()
         
-        # Create status bar
-        self.create_status_bar()
-            
-    def openviewsdocumentation(input):
-        title = f"OverSee v{settings.overseeversion} Documentation"
-        show_markdown_docs(viewtypemarkdown, title=title)
-
-    def create_menu_bar(self):
-        menubar = tk.Menu(self.root)
-        self.root.config(menu=menubar)
+        # Bind tab change event
+        self.notebook.bind('<<NotebookTabChanged>>', self.on_tab_change)
         
-        # Settings dropdown
-        settings_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="Settings", menu=settings_menu)
-        settings_menu.add_command(label="Preferences", command=self.open_preferences)
-        settings_menu.add_command(label="Network Config", command=self.open_network_config)
-        settings_menu.add_separator()
-        settings_menu.add_command(label="About", command=self.show_about)
+    def create_printers_tab(self):
+        """Create the Printers tab"""
+        printers_frame = ttk.Frame(self.main_notebook)
+        self.main_notebook.add(printers_frame, text="Printers")
+        
+        # Configure grid for printers frame
+        printers_frame.grid_rowconfigure(0, weight=1)
+        printers_frame.grid_columnconfigure(0, weight=1)
+        
+        # Create content frame
+        content_frame = ttk.Frame(printers_frame)
+        content_frame.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+        
+        # Add placeholder content
+        placeholder_label = ttk.Label(
+            content_frame,
+            text="Printer management functionality coming soon...",
+            justify='center',
+            font=('Arial', 12)
+        )
+        placeholder_label.pack(expand=True)
+        
+    def create_iot_tab(self):
+        """Create the IoT tab with device management functionality"""
+        iot_frame = ttk.Frame(self.main_notebook)
+        self.main_notebook.add(iot_frame, text="IoT")
+        
+        # Configure grid for IoT frame
+        iot_frame.grid_rowconfigure(0, weight=1)
+        iot_frame.grid_columnconfigure(1, weight=1)  # Middle column expands
+        
+        # Left panel - Device types list
+        left_panel = ttk.Frame(iot_frame)
+        left_panel.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        left_panel.grid_rowconfigure(0, weight=1)
+        left_panel.grid_columnconfigure(0, weight=1)
+        
+        # Create device types list
+        device_types = [
+            "Billboards", "EV Charges", "Electricity Meters", "Wind Turbines",
+            "Road Signs", "Vacuuming robots", "Mowing robots", "GPS Data",
+            "Industrial Control Systems", "Gas Pumps", "License Plate Readers",
+            "Wiretaps", "Battery backups", "Building refrigeration units",
+            "Door locks", "Video Conferencing Gear", "Network Storage",
+            "Stereo Systems", "Smart Home", "3D Printers"
+        ]
+        
+        # Create listbox for device types
+        self.device_listbox = tk.Listbox(left_panel, selectmode=tk.SINGLE, bg='#2b2b2b', fg='#ffffff')
+        self.device_listbox.grid(row=0, column=0, sticky="nsew")
+        
+        # Add scrollbar
+        scrollbar = ttk.Scrollbar(left_panel, orient="vertical", command=self.device_listbox.yview)
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        self.device_listbox.configure(yscrollcommand=scrollbar.set)
+        
+        # Populate device types
+        for device_type in device_types:
+            self.device_listbox.insert(tk.END, device_type)
+        
+        # Add device button
+        add_button = ttk.Button(left_panel, text="Add Device", command=self.show_add_device_dialog)
+        add_button.grid(row=1, column=0, columnspan=2, pady=5, sticky="ew")
+        
+        # Add sync button
+        sync_button = ttk.Button(left_panel, text="Sync with Server", command=self.sync_iot_devices)
+        sync_button.grid(row=2, column=0, columnspan=2, pady=5, sticky="ew")
+        
+        # Middle panel - Device list
+        middle_panel = ttk.Frame(iot_frame)
+        middle_panel.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
+        middle_panel.grid_rowconfigure(0, weight=1)
+        middle_panel.grid_columnconfigure(0, weight=1)
+        
+        # Create treeview for devices
+        self.device_tree = ttk.Treeview(middle_panel, columns=('IP', 'Type', 'Status', 'Last Seen'), show='headings')
+        self.device_tree.heading('IP', text='IP Address')
+        self.device_tree.heading('Type', text='Device Type')
+        self.device_tree.heading('Status', text='Status')
+        self.device_tree.heading('Last Seen', text='Last Seen')
+        
+        self.device_tree.column('IP', width=150)
+        self.device_tree.column('Type', width=150)
+        self.device_tree.column('Status', width=100)
+        self.device_tree.column('Last Seen', width=150)
+        
+        self.device_tree.grid(row=0, column=0, sticky="nsew")
+        
+        # Add scrollbar to device tree
+        device_scrollbar = ttk.Scrollbar(middle_panel, orient="vertical", command=self.device_tree.yview)
+        device_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.device_tree.configure(yscrollcommand=device_scrollbar.set)
+        
+        # Right panel - Device details
+        right_panel = ttk.Frame(iot_frame)
+        right_panel.grid(row=0, column=2, sticky="nsew", padx=5, pady=5)
+        right_panel.grid_rowconfigure(1, weight=1)
+        right_panel.grid_columnconfigure(0, weight=1)
+        
+        # Device info frame
+        info_frame = ttk.LabelFrame(right_panel, text="Device Information", padding=10)
+        info_frame.grid(row=0, column=0, sticky="ew", pady=(0, 5))
+        
+        # Device info labels
+        self.device_info = {
+            'ip': ttk.Label(info_frame, text="IP: -"),
+            'type': ttk.Label(info_frame, text="Type: -"),
+            'status': ttk.Label(info_frame, text="Status: -"),
+            'last_seen': ttk.Label(info_frame, text="Last Seen: -"),
+            'notes': ttk.Label(info_frame, text="Notes: -")
+        }
+        
+        for i, (key, label) in enumerate(self.device_info.items()):
+            label.grid(row=i, column=0, sticky="w", pady=2)
+        
+        # Device controls frame
+        controls_frame = ttk.LabelFrame(right_panel, text="Device Controls", padding=10)
+        controls_frame.grid(row=1, column=0, sticky="nsew", pady=(0, 5))
+        
+        # Bind device selection event
+        self.device_tree.bind('<<TreeviewSelect>>', self.on_device_select)
+        self.device_listbox.bind('<<ListboxSelect>>', self.on_device_type_select)
+        
+        # Initialize database
+        self.init_iot_database()
+        
+        # Initial sync with remote database
+        self.sync_iot_devices()
+        
+    def init_iot_database(self):
+        """Initialize SQLite database for IoT devices"""
+        db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'iot_devices.db')
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Create devices table with all required columns
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS devices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ip TEXT NOT NULL,
+                port INTEGER,
+                device_type TEXT NOT NULL,
+                device_name TEXT,
+                location TEXT,
+                status TEXT,
+                last_seen TIMESTAMP,
+                notes TEXT
+            )
+        ''')
+        
+        # Check if we need to migrate existing data
+        try:
+            # Try to access the new columns
+            cursor.execute('SELECT device_name, location FROM devices LIMIT 1')
+        except sqlite3.OperationalError:
+            # If columns don't exist, add them
+            try:
+                cursor.execute('ALTER TABLE devices ADD COLUMN device_name TEXT')
+                cursor.execute('ALTER TABLE devices ADD COLUMN location TEXT')
+                print("Successfully migrated database to include new columns")
+            except sqlite3.OperationalError as e:
+                print(f"Error during database migration: {e}")
+        
+        conn.commit()
+        conn.close()
+        
+    def show_add_device_dialog(self):
+        """Show dialog to add a new device"""
+        # Get device types from listbox
+        device_types = [self.device_listbox.get(i) for i in range(self.device_listbox.size())]
+        
+        # Create and show dialog
+        AddDeviceIoTDialog(
+            self.root,
+            device_types,
+            on_device_added=lambda ip, type, status, last_seen: self.device_tree.insert(
+                '', 'end', values=(ip, type, status, last_seen)
+            )
+        )
 
-        # Advanced dropdown
-        advanced_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="Advanced", menu=advanced_menu)
-        advanced_menu.add_command(label="Reinit all", command=self.reinit_all)
-
-        # Documentation Dropdown
-        docs_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="Documentation", menu=docs_menu)
-        docs_menu.add_command(label="View Types", command=self.openviewsdocumentation)
-
-    def open_preferences(self):
-        """Open the preferences window"""
-        SettingsWindow(self.root)
-    
-    def open_network_config(self):
-        messagebox.showinfo("Settings", "Network configuration has not been fully implemented.")
-    
-    def show_about(self):
-        """Show about window"""
-        AboutGUI(self.root)
+    def on_device_select(self, event):
+        """Handle device selection in the treeview"""
+        selection = self.device_tree.selection()
+        if not selection:
+            return
+            
+        item = selection[0]
+        values = self.device_tree.item(item)['values']
+        
+        # Update device info
+        self.device_info['ip'].config(text=f"IP: {values[0]}")
+        self.device_info['type'].config(text=f"Type: {values[1]}")
+        self.device_info['status'].config(text=f"Status: {values[2]}")
+        self.device_info['last_seen'].config(text=f"Last Seen: {values[3]}")
+        
+        # Get additional info from database
+        try:
+            conn = sqlite3.connect(os.path.join(os.path.dirname(__file__), '..', 'data', 'iot_devices.db'))
+            cursor = conn.cursor()
+            cursor.execute('SELECT notes FROM devices WHERE ip = ?', (values[0],))
+            result = cursor.fetchone()
+            conn.close()
+            
+            if result:
+                self.device_info['notes'].config(text=f"Notes: {result[0]}")
+            else:
+                self.device_info['notes'].config(text="Notes: -")
+        except Exception as e:
+            print(f"Error fetching device notes: {e}")
+            self.device_info['notes'].config(text="Notes: Error loading")
+        
+    def on_device_type_select(self, event):
+        """Handle device type selection in the listbox"""
+        selection = self.device_listbox.curselection()
+        if not selection:
+            return
+            
+        device_type = self.device_listbox.get(selection[0])
+        
+        # Clear current items
+        for item in self.device_tree.get_children():
+            self.device_tree.delete(item)
+        
+        # Load devices of selected type from database
+        try:
+            conn = sqlite3.connect(os.path.join(os.path.dirname(__file__), '..', 'data', 'iot_devices.db'))
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT ip, port, device_type, status, last_seen
+                FROM devices
+                WHERE device_type = ?
+            ''', (device_type,))
+            
+            for row in cursor.fetchall():
+                self.device_tree.insert('', 'end', values=(
+                    f"{row[0]}:{row[1]}",
+                    row[2],
+                    row[3],
+                    row[4]
+                ))
+            
+            conn.close()
+        except Exception as e:
+            print(f"Error loading devices: {e}")
 
     def create_map_view(self):
         map_frame = ttk.Frame(self.notebook)
@@ -727,9 +959,7 @@ class MainGUI:
                 try:
                     from gui.rendermatrix import cleanup_camera_manager
                     cleanup_camera_manager()
-                except ImportError:
-                    pass
-                except Exception as e:
+                except (ImportError, Exception) as e:
                     print(f"Error cleaning up camera manager: {e}")
         
         # Handle list view
@@ -1381,6 +1611,36 @@ class MainGUI:
         self.prop_resolution = ttk.Label(self.properties_frame, text="Resolution: -")
         self.prop_resolution.grid(row=3, column=0, sticky="w", pady=2)
 
+    def create_menu_bar(self):
+        """Create the main menu bar"""
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+        
+        # Settings dropdown
+        settings_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Settings", menu=settings_menu)
+        settings_menu.add_command(label="Preferences", command=self.open_preferences)
+        settings_menu.add_command(label="Network Config", command=self.open_network_config)
+        settings_menu.add_separator()
+        settings_menu.add_command(label="About", command=self.show_about)
+
+        # Advanced dropdown
+        advanced_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Advanced", menu=advanced_menu)
+        advanced_menu.add_command(label="Reinit all", command=self.reinit_all)
+        
+    def open_preferences(self):
+        """Open the preferences window"""
+        SettingsWindow(self.root)
+    
+    def open_network_config(self):
+        """Open network configuration dialog"""
+        messagebox.showinfo("Settings", "Network configuration dialog would open here")
+    
+    def show_about(self):
+        """Show about window"""
+        AboutGUI(self.root)
+
     def cleanup_on_close(self):
         """Clean up resources when closing the application"""
         try:
@@ -1434,6 +1694,28 @@ class MainGUI:
         
         # Destroy the root window
         self.root.destroy()
+
+    def sync_iot_devices(self):
+        """Sync devices from remote database"""
+        try:
+            from backend.remotedb import RemoteDatabase
+            
+            # Create remote database connection
+            remote_db = RemoteDatabase()
+            
+            # Get local database path
+            db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'iot_devices.db')
+            
+            # Sync devices
+            if remote_db.sync_devices(db_path):
+                # Refresh device list
+                self.on_device_type_select(None)
+                messagebox.showinfo("Success", "Devices synchronized successfully")
+            else:
+                messagebox.showerror("Error", "Failed to synchronize devices")
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Error syncing devices: {str(e)}")
 
 
 def runmaingui():

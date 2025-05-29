@@ -57,6 +57,10 @@ insecam_output_file = os.path.join(DATA_DIR, "stream_links.txt")  # Raw output (
 base_url = "http://www.insecam.org/en/byrating/"  # Endpoint to scrape by
 total_pages = 448  # Total number of pages on insecam, may require manual updating (I might implement autoupdating for this later)
 
+# Remote Database Settings
+remote_db_url = "http://your-domain.com/website/backend/db.php"  # Update with your actual domain
+remote_db_api_key = "your_api_key_here"  # Update with your actual API key
+
 # Ensure all required directories exist
 ensure_data_directories()
 
