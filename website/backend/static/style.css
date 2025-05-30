@@ -1,0 +1,36 @@
+/* Custom styles for the dashboard */
+:root {
+    --dark-bg: #1a1a1a;
+    --darker-bg: #141414;
+    --card-bg: #2d2d2d;
+    --border-color: #404040;
+    --text-color: #e0e0e0;
+}
+
+body {
+    background-color: var(--dark-bg);
+    color: var(--text-color);
+    padding: 20px;
+}
+
+.card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    margin-bottom: 20px;
+}
+
+.card-header {
+    background-color: var(--darker-bg);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #0d6efd;
+}
+
+.stat-label {
+    color: var(--text-color);
+    opacity: 0.8;
+} 
