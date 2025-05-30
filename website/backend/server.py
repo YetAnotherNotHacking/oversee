@@ -16,10 +16,43 @@ import pandas as pd
 from collections import deque
 import asyncio
 from contextlib import contextmanager
+import aiosqlite
+import threading
 
 DB_PATH = "hostsresponse.db"
 MAX_QUERY_HISTORY = 1000
 QUERY_HISTORY_WINDOW = 3600
+
+db_pool = []
+pool_lock = threading.Lock()
+MAX_POOL_SIZE = 10
+
+def get_db_connection():
+    with pool_lock:
+        if db_pool:
+            return db_pool.pop()
+        return sqlite3.connect(DB_PATH, check_same_thread=False)
+
+def release_db_connection(conn):
+    with pool_lock:
+        if len(db_pool) < MAX_POOL_SIZE:
+            db_pool.append(conn)
+        else:
+            conn.close()
+
+@contextmanager
+def get_db():
+    conn = get_db_connection()
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    finally:
+        release_db_connection(conn)
+
+for _ in range(MAX_POOL_SIZE):
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    db_pool.append(conn)
 
 app = FastAPI(
     title="Host Response API",
@@ -34,15 +67,6 @@ templates = Jinja2Templates(directory="templates")
 query_history = deque(maxlen=MAX_QUERY_HISTORY)
 query_times = deque(maxlen=MAX_QUERY_HISTORY)
 
-@contextmanager
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    try:
-        yield conn
-    finally:
-        conn.close()
-
 def track_query_time(start_time):
     end_time = time.time()
     query_times.append(end_time - start_time)
@@ -51,19 +75,18 @@ def track_query_time(start_time):
 async def get_db_stats():
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM hosts")
-        total_records = cursor.fetchone()[0] or 0
-        
-        cursor.execute("SELECT COUNT(DISTINCT server) FROM hosts")
-        unique_servers = cursor.fetchone()[0] or 0
-        
-        cursor.execute("SELECT AVG(status_code) FROM hosts")
-        avg_status = cursor.fetchone()[0] or 0
-        
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as total_records,
+                COUNT(DISTINCT server) as unique_servers,
+                AVG(status_code) as avg_status
+            FROM hosts
+        """)
+        result = cursor.fetchone()
         return {
-            "total_records": total_records,
-            "unique_servers": unique_servers,
-            "average_status_code": avg_status
+            "total_records": result['total_records'] or 0,
+            "unique_servers": result['unique_servers'] or 0,
+            "average_status_code": result['avg_status'] or 0
         }
 
 async def get_performance_stats():
