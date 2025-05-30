@@ -114,11 +114,13 @@
                                     <ul class="small">
                                         <li><code>server</code> - Filter by server name (e.g., nginx, apache)</li>
                                         <li><code>status_code</code> - Filter by HTTP status code (e.g., 200, 404)</li>
+                                        <li><code>content</code> - Search in title and body content (e.g., "error", "login")</li>
                                         <li><code>limit</code> - Number of results (1-1000, default: 100)</li>
                                         <li><code>offset</code> - Skip N results (default: 0)</li>
                                     </ul>
-                                    <strong>Example:</strong>
+                                    <strong>Examples:</strong>
                                     <code class="d-block small mt-1">/api/hosts?server=nginx&status_code=200&limit=50</code>
+                                    <code class="d-block small mt-1">/api/hosts?content=error&limit=20</code>
                                 </div>
                             </li>
                             <li class="mb-3">
