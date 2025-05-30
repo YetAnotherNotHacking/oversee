@@ -75,6 +75,16 @@ class Database {
     }
 }
 
+// Start session at the very beginning
+session_start();
+
+// Debug function
+function debug_to_file($message) {
+    $log_file = __DIR__ . '/debug.log';
+    $timestamp = date('Y-m-d H:i:s');
+    file_put_contents($log_file, "[$timestamp] $message\n", FILE_APPEND);
+}
+
 // Handle API requests
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action'])) {
     header('Content-Type: application/json');
@@ -102,21 +112,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action'])) {
 
 // Handle web interface
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    session_start();
+    debug_to_file("POST request received");
     
     // Handle login
     if (isset($_POST['login'])) {
-        if (md5($_POST['password']) === ADMIN_PASSWORD_HASH) {
+        debug_to_file("Login attempt detected");
+        
+        $input_password = $_POST['password'];
+        $input_hash = md5($input_password);
+        
+        debug_to_file("Input password: " . $input_password);
+        debug_to_file("Input hash: " . $input_hash);
+        debug_to_file("Expected hash: " . ADMIN_PASSWORD_HASH);
+        
+        // Strict comparison
+        if (strcmp($input_hash, ADMIN_PASSWORD_HASH) === 0) {
+            debug_to_file("Password match - setting session");
             $_SESSION['authenticated'] = true;
+            debug_to_file("Session authenticated set to: " . ($_SESSION['authenticated'] ? 'true' : 'false'));
+            
+            // Force session write
+            session_write_close();
+            session_start();
+            
+            debug_to_file("Redirecting after successful login");
             header('Location: ' . $_SERVER['PHP_SELF']);
             exit;
         } else {
+            debug_to_file("Password mismatch");
             $error = "Invalid password";
         }
     }
     
     // Handle device operations
     if (isset($_SESSION['authenticated'])) {
+        debug_to_file("User is authenticated, processing device operations");
         $db = new Database();
         
         if (isset($_POST['add_device'])) {
@@ -139,6 +169,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+// Debug session state
+debug_to_file("Session state: " . print_r($_SESSION, true));
+
 // Display web interface
 ?>
 <!DOCTYPE html>
@@ -150,23 +183,115 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
     <style>
-        body { background-color: #f8f9fa; }
-        .device-form { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .table-container { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        :root {
+            --dark-bg: #1a1a1a;
+            --darker-bg: #141414;
+            --card-bg: #2d2d2d;
+            --border-color: #404040;
+            --text-color: #e0e0e0;
+            --accent-color: #0d6efd;
+        }
+        
+        body { 
+            background-color: var(--dark-bg);
+            color: var(--text-color);
+        }
+        
+        .device-form, .table-container { 
+            background-color: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .form-control, .form-select {
+            background-color: var(--darker-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+        }
+        
+        .form-control:focus, .form-select:focus {
+            background-color: var(--darker-bg);
+            border-color: var(--accent-color);
+            color: var(--text-color);
+            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        }
+        
+        .table {
+            color: var(--text-color);
+        }
+        
+        .table-striped > tbody > tr:nth-of-type(odd) {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        
+        .table-striped > tbody > tr:nth-of-type(even) {
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+        
+        .btn-primary {
+            background-color: var(--accent-color);
+            border: none;
+        }
+        
+        .btn-primary:hover {
+            background-color: #0b5ed7;
+        }
+        
+        .btn-danger {
+            background-color: #dc3545;
+            border: none;
+        }
+        
+        .btn-danger:hover {
+            background-color: #bb2d3b;
+        }
+        
+        .modal-content {
+            background-color: var(--card-bg);
+            color: var(--text-color);
+        }
+        
+        .modal-header {
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .modal-footer {
+            border-top: 1px solid var(--border-color);
+        }
+        
+        .alert {
+            background-color: rgba(220, 53, 69, 0.2);
+            border: 1px solid #dc3545;
+            color: #ff6b6b;
+        }
+        
+        .badge {
+            padding: 0.5em 0.75em;
+        }
+        
+        .badge.bg-success {
+            background-color: #198754 !important;
+        }
+        
+        .badge.bg-secondary {
+            background-color: #6c757d !important;
+        }
     </style>
 </head>
 <body>
     <div class="container py-5">
-        <?php if (!isset($_SESSION['authenticated'])): ?>
+        <?php if (!isset($_SESSION['authenticated']) || $_SESSION['authenticated'] !== true): ?>
             <!-- Login Form -->
             <div class="row justify-content-center">
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <div class="device-form">
                         <h2 class="text-center mb-4">Login</h2>
                         <?php if (isset($error)): ?>
-                            <div class="alert alert-danger"><?php echo $error; ?></div>
+                            <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
                         <?php endif; ?>
-                        <form method="POST">
+                        <form method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>">
                             <div class="mb-3">
                                 <label for="password" class="form-label">Password</label>
                                 <input type="password" class="form-control" id="password" name="password" required>
@@ -182,7 +307,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="col-md-4">
                     <div class="device-form">
                         <h2 class="mb-4">Add Device</h2>
-                        <form method="POST">
+                        <form method="POST" action="<?php echo $_SERVER['PHP_SELF']; ?>">
                             <div class="mb-3">
                                 <label for="ip" class="form-label">IP Address</label>
                                 <input type="text" class="form-control" id="ip" name="ip" required>
