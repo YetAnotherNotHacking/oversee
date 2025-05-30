@@ -52,13 +52,13 @@ async def get_db_stats():
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM hosts")
-        total_records = cursor.fetchone()[0]
+        total_records = cursor.fetchone()[0] or 0
         
         cursor.execute("SELECT COUNT(DISTINCT server) FROM hosts")
-        unique_servers = cursor.fetchone()[0]
+        unique_servers = cursor.fetchone()[0] or 0
         
         cursor.execute("SELECT AVG(status_code) FROM hosts")
-        avg_status = cursor.fetchone()[0]
+        avg_status = cursor.fetchone()[0] or 0
         
         return {
             "total_records": total_records,
