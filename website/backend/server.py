@@ -130,9 +130,11 @@ async def dashboard(request: Request):
 async def get_hosts(
     server: Optional[str] = None,
     status_code: Optional[int] = None,
+    content: Optional[str] = None,
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0)
 ):
+    """Get hosts with optional filtering"""
     start_time = time.time()
     
     query = "SELECT * FROM hosts WHERE 1=1"
@@ -145,6 +147,11 @@ async def get_hosts(
     if status_code:
         query += " AND status_code = ?"
         params.append(status_code)
+    
+    if content:
+        query += " AND (body LIKE ? OR title LIKE ?)"
+        search_term = f"%{content}%"
+        params.extend([search_term, search_term])
     
     query += " LIMIT ? OFFSET ?"
     params.extend([limit, offset])
@@ -192,6 +199,7 @@ async def get_api_docs():
                 "parameters": {
                     "server": "Filter by server name",
                     "status_code": "Filter by status code",
+                    "content": "Filter by content",
                     "limit": "Number of results to return (1-1000)",
                     "offset": "Number of results to skip"
                 }
