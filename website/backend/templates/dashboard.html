@@ -106,19 +106,60 @@
                     <div class="card-body">
                         <h6>Available Endpoints:</h6>
                         <ul class="list-unstyled">
-                            <li class="mb-2">
+                            <li class="mb-3">
                                 <code>GET /api/hosts</code>
-                                <small class="d-block text-muted">Get all hosts with optional filtering</small>
+                                <small class="d-block text-muted">Get all hosts with filtering options</small>
+                                <div class="mt-2">
+                                    <strong>Query Parameters:</strong>
+                                    <ul class="small">
+                                        <li><code>server</code> - Filter by server name (e.g., nginx, apache)</li>
+                                        <li><code>status_code</code> - Filter by HTTP status code (e.g., 200, 404)</li>
+                                        <li><code>limit</code> - Number of results (1-1000, default: 100)</li>
+                                        <li><code>offset</code> - Skip N results (default: 0)</li>
+                                    </ul>
+                                    <strong>Example:</strong>
+                                    <code class="d-block small mt-1">/api/hosts?server=nginx&status_code=200&limit=50</code>
+                                </div>
                             </li>
-                            <li class="mb-2">
+                            <li class="mb-3">
                                 <code>GET /api/hosts/{ip}</code>
-                                <small class="d-block text-muted">Get specific host by IP</small>
+                                <small class="d-block text-muted">Get specific host by IP address</small>
+                                <div class="mt-2">
+                                    <strong>Example:</strong>
+                                    <code class="d-block small mt-1">/api/hosts/192.168.1.1</code>
+                                </div>
                             </li>
-                            <li class="mb-2">
+                            <li class="mb-3">
                                 <code>GET /api/stats</code>
-                                <small class="d-block text-muted">Get current statistics</small>
+                                <small class="d-block text-muted">Get current database and performance statistics</small>
+                                <div class="mt-2">
+                                    <strong>Returns:</strong>
+                                    <ul class="small">
+                                        <li>Total records</li>
+                                        <li>Unique servers</li>
+                                        <li>Average status code</li>
+                                        <li>Queries per second</li>
+                                        <li>Average response time</li>
+                                    </ul>
+                                </div>
                             </li>
                         </ul>
+                        <div class="mt-3">
+                            <strong>Response Format:</strong>
+                            <pre class="small mt-2" style="background: var(--darker-bg); padding: 10px; border-radius: 4px;">
+{
+    "data": [
+        {
+            "ip": "192.168.1.1",
+            "title": "Example Host",
+            "server": "nginx",
+            "status_code": 200,
+            "timestamp": "2024-03-14T12:00:00",
+            "body": "Response content..."
+        }
+    ]
+}</pre>
+                        </div>
                     </div>
                 </div>
             </div>
