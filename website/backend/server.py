@@ -17,7 +17,7 @@ from collections import deque
 import asyncio
 from contextlib import contextmanager
 
-DB_PATH = "hostsresponse.db"
+DB_PATH = "hostresponse.db"
 MAX_QUERY_HISTORY = 1000
 QUERY_HISTORY_WINDOW = 3600
 
