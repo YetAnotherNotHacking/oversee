@@ -8,3 +8,7 @@ pynput
 folium
 tkintermapview
 appdirs
+pyOpenSSL
+playwright
+pillow
+ttkthemes
