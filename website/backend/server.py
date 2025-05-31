@@ -22,6 +22,12 @@ import threading
 DB_PATH = "port80responses.db"
 MAX_QUERY_HISTORY = 1000
 QUERY_HISTORY_WINDOW = 3600
+STATS_CACHE_DURATION = 300
+
+db_stats_cache = {
+    "data": None,
+    "last_updated": 0
+}
 
 db_pool = []
 pool_lock = threading.Lock()
@@ -73,6 +79,12 @@ def track_query_time(start_time):
     query_history.append(end_time)
 
 async def get_db_stats():
+    current_time = time.time()
+    
+    if (db_stats_cache["data"] is not None and 
+        current_time - db_stats_cache["last_updated"] < STATS_CACHE_DURATION):
+        return db_stats_cache["data"]
+    
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -83,11 +95,16 @@ async def get_db_stats():
             FROM hosts
         """)
         result = cursor.fetchone()
-        return {
+        stats = {
             "total_records": result['total_records'] or 0,
             "unique_servers": result['unique_servers'] or 0,
             "average_status_code": result['avg_status'] or 0
         }
+        
+        db_stats_cache["data"] = stats
+        db_stats_cache["last_updated"] = current_time
+        
+        return stats
 
 async def get_performance_stats():
     current_time = time.time()
@@ -157,7 +174,6 @@ async def get_hosts(
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0)
 ):
-    """Get hosts with optional filtering"""
     start_time = time.time()
     
     query = "SELECT * FROM hosts WHERE 1=1"
