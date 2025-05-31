@@ -24,6 +24,8 @@ try:
     import threading
     import time
     import logging
+    import os
+    import sys
 except:
     print("You appear to be in a minimal python environment, please come back in a full environment to ensure this script will function correctly.")
 
@@ -35,6 +37,28 @@ def initialization_tasks(startupmenu):
     startupmenu.update_status("Loading program settings", 5.0)
     import settings
     startupmenu.update_status("Loaded program settings", 10.0)
+    
+    # Install Playwright browsers if needed
+    startupmenu.update_status("Installing Playwright browsers...", 12.0)
+    try:
+        import subprocess
+        import sys
+        
+        # Check if Playwright browsers are installed
+        try:
+            from playwright.sync_api import sync_playwright
+            with sync_playwright() as p:
+                if not os.path.exists(p.chromium.executable_path):
+                    print("Installing Playwright browsers...")
+                    subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
+                    print("Playwright browsers installed successfully")
+        except Exception as e:
+            print(f"Warning: Failed to install Playwright browsers: {e}")
+            
+    except Exception as e:
+        print(f"Warning: Failed to install Playwright browsers: {e}")
+    startupmenu.update_status("Playwright installation complete", 15.0)
+    
     startupmenu.update_status("Loading local libs", 15.0)
     from initdata.headinit import initall
     from initdata.ip2locdownload import download_database, extract_database
@@ -135,6 +159,35 @@ def initialization_tasks(startupmenu):
 def on_completion():
     print("Initialization complete! Starting main application...")
     
+def init():
+    """Initialize the application"""
+    try:
+        # Create data directory
+        os.makedirs(settings.data_dir, exist_ok=True)
+        
+        # Initialize database
+        init_database()
+        
+        # Install Playwright browsers if needed
+        try:
+            from playwright.sync_api import sync_playwright
+            with sync_playwright() as p:
+                if not os.path.exists(p.chromium.executable_path):
+                    print("Installing Playwright browsers...")
+                    import subprocess
+                    subprocess.run(["playwright", "install", "chromium"], check=True)
+                    print("Playwright browsers installed successfully")
+        except Exception as e:
+            print(f"Warning: Failed to install Playwright browsers: {e}")
+        
+        # Start GUI
+        from gui.initgui import init_gui
+        init_gui()
+        
+    except Exception as e:
+        print(f"Error during initialization: {e}")
+        sys.exit(1)
+
 if __name__ == "__main__":
     # INIT
     startupmenu = StartUpMenu()

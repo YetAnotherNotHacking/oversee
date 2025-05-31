@@ -2,6 +2,8 @@ import tkinter as tk
 from tkinter import ttk
 import threading
 import time
+import os
+import sys
 
 class StartUpMenu:
     def __init__(self):
@@ -284,3 +286,20 @@ class StartUpMenu:
         """Skip the IP2LOC loading process"""
         print("Skipping IP2LOC loading...")
         self._complete_loading()
+
+def init_gui():
+    """Initialize the GUI"""
+    try:
+        # Create data directory if it doesn't exist
+        os.makedirs(settings.data_dir, exist_ok=True)
+        
+        # Initialize database
+        init_database()
+        
+        # Start GUI
+        from gui.maingui import runmaingui
+        runmaingui()
+        
+    except Exception as e:
+        print(f"Error during GUI initialization: {e}")
+        sys.exit(1)
