@@ -25,6 +25,9 @@ import queue
 import requests
 from gui.aboutgui import AboutGUI
 from gui.adddeviceiotgui import AddDeviceIoTDialog
+import json
+import webbrowser
+import io
 
 ip_list_file = settings.ip_list_file
 
@@ -358,229 +361,503 @@ class MainGUI:
         placeholder_label.pack(expand=True)
         
     def create_iot_tab(self):
-        """Create the IoT tab with device management functionality"""
+        """Create the IoT tab with advanced search functionality"""
         iot_frame = ttk.Frame(self.main_notebook)
         self.main_notebook.add(iot_frame, text="IoT")
         
-        # Configure grid for IoT frame
-        iot_frame.grid_rowconfigure(0, weight=1)
-        iot_frame.grid_columnconfigure(1, weight=1)  # Middle column expands
+        # Configure grid for main frame
+        iot_frame.grid_rowconfigure(1, weight=1)  # Results area expands
+        iot_frame.grid_columnconfigure(0, weight=1)
         
-        # Left panel - Device types list
-        left_panel = ttk.Frame(iot_frame)
-        left_panel.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
-        left_panel.grid_rowconfigure(0, weight=1)
-        left_panel.grid_columnconfigure(0, weight=1)
+        # Query Builder Panel
+        query_frame = ttk.LabelFrame(iot_frame, text="Query Builder", padding=10)
+        query_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
         
-        # Create device types list
-        device_types = [
-            "Billboards", "EV Charges", "Electricity Meters", "Wind Turbines",
-            "Road Signs", "Vacuuming robots", "Mowing robots", "GPS Data",
-            "Industrial Control Systems", "Gas Pumps", "License Plate Readers",
-            "Wiretaps", "Battery backups", "Building refrigeration units",
-            "Door locks", "Video Conferencing Gear", "Network Storage",
-            "Stereo Systems", "Smart Home", "3D Printers"
-        ]
+        # Server filter
+        ttk.Label(query_frame, text="Server:").grid(row=0, column=0, padx=5, pady=2, sticky="w")
+        self.server_var = tk.StringVar()
+        server_entry = ttk.Entry(query_frame, textvariable=self.server_var)
+        server_entry.grid(row=0, column=1, padx=5, pady=2, sticky="ew")
         
-        # Create listbox for device types
-        self.device_listbox = tk.Listbox(left_panel, selectmode=tk.SINGLE, bg='#2b2b2b', fg='#ffffff')
-        self.device_listbox.grid(row=0, column=0, sticky="nsew")
+        # Status code filter
+        ttk.Label(query_frame, text="Status Code:").grid(row=0, column=2, padx=5, pady=2, sticky="w")
+        self.status_var = tk.StringVar()
+        status_entry = ttk.Entry(query_frame, textvariable=self.status_var)
+        status_entry.grid(row=0, column=3, padx=5, pady=2, sticky="ew")
+        
+        # Content search
+        ttk.Label(query_frame, text="Content Search:").grid(row=1, column=0, padx=5, pady=2, sticky="w")
+        self.content_var = tk.StringVar()
+        content_entry = ttk.Entry(query_frame, textvariable=self.content_var)
+        content_entry.grid(row=1, column=1, columnspan=3, padx=5, pady=2, sticky="ew")
+        
+        # Results limit
+        ttk.Label(query_frame, text="Limit:").grid(row=2, column=0, padx=5, pady=2, sticky="w")
+        self.limit_var = tk.StringVar(value="40")
+        limit_entry = ttk.Entry(query_frame, textvariable=self.limit_var, width=10)
+        limit_entry.grid(row=2, column=1, padx=5, pady=2, sticky="w")
+        
+        # Search button
+        search_btn = ttk.Button(query_frame, text="Search", command=self.execute_query)
+        search_btn.grid(row=2, column=3, padx=5, pady=2, sticky="e")
+        
+        # Results area
+        results_frame = ttk.Frame(iot_frame)
+        results_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+        results_frame.grid_rowconfigure(0, weight=1)
+        results_frame.grid_columnconfigure(0, weight=1)
+        
+        # Create treeview for results
+        self.query_tree = ttk.Treeview(results_frame, columns=('IP', 'Server', 'Status', 'Title'), show='headings')
+        self.query_tree.heading('IP', text='IP Address')
+        self.query_tree.heading('Server', text='Server')
+        self.query_tree.heading('Status', text='Status Code')
+        self.query_tree.heading('Title', text='Title')
+        
+        self.query_tree.column('IP', width=150)
+        self.query_tree.column('Server', width=100)
+        self.query_tree.column('Status', width=80)
+        self.query_tree.column('Title', width=300)
         
         # Add scrollbar
-        scrollbar = ttk.Scrollbar(left_panel, orient="vertical", command=self.device_listbox.yview)
+        scrollbar = ttk.Scrollbar(results_frame, orient="vertical", command=self.query_tree.yview)
         scrollbar.grid(row=0, column=1, sticky="ns")
-        self.device_listbox.configure(yscrollcommand=scrollbar.set)
+        self.query_tree.configure(yscrollcommand=scrollbar.set)
         
-        # Populate device types
-        for device_type in device_types:
-            self.device_listbox.insert(tk.END, device_type)
+        self.query_tree.grid(row=0, column=0, sticky="nsew")
         
-        # Add device button
-        add_button = ttk.Button(left_panel, text="Add Device", command=self.show_add_device_dialog)
-        add_button.grid(row=1, column=0, columnspan=2, pady=5, sticky="ew")
+        # Bind double-click event
+        self.query_tree.bind('<Double-1>', self.on_result_select)
         
-        # Add sync button
-        sync_button = ttk.Button(left_panel, text="Sync with Server", command=self.sync_iot_devices)
-        sync_button.grid(row=2, column=0, columnspan=2, pady=5, sticky="ew")
-        
-        # Middle panel - Device list
-        middle_panel = ttk.Frame(iot_frame)
-        middle_panel.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
-        middle_panel.grid_rowconfigure(0, weight=1)
-        middle_panel.grid_columnconfigure(0, weight=1)
-        
-        # Create treeview for devices
-        self.device_tree = ttk.Treeview(middle_panel, columns=('IP', 'Type', 'Status', 'Last Seen'), show='headings')
-        self.device_tree.heading('IP', text='IP Address')
-        self.device_tree.heading('Type', text='Device Type')
-        self.device_tree.heading('Status', text='Status')
-        self.device_tree.heading('Last Seen', text='Last Seen')
-        
-        self.device_tree.column('IP', width=150)
-        self.device_tree.column('Type', width=150)
-        self.device_tree.column('Status', width=100)
-        self.device_tree.column('Last Seen', width=150)
-        
-        self.device_tree.grid(row=0, column=0, sticky="nsew")
-        
-        # Add scrollbar to device tree
-        device_scrollbar = ttk.Scrollbar(middle_panel, orient="vertical", command=self.device_tree.yview)
-        device_scrollbar.grid(row=0, column=1, sticky="ns")
-        self.device_tree.configure(yscrollcommand=device_scrollbar.set)
-        
-        # Right panel - Device details
-        right_panel = ttk.Frame(iot_frame)
-        right_panel.grid(row=0, column=2, sticky="nsew", padx=5, pady=5)
-        right_panel.grid_rowconfigure(1, weight=1)
-        right_panel.grid_columnconfigure(0, weight=1)
-        
-        # Device info frame
-        info_frame = ttk.LabelFrame(right_panel, text="Device Information", padding=10)
-        info_frame.grid(row=0, column=0, sticky="ew", pady=(0, 5))
-        
-        # Device info labels
-        self.device_info = {
-            'ip': ttk.Label(info_frame, text="IP: -"),
-            'type': ttk.Label(info_frame, text="Type: -"),
-            'status': ttk.Label(info_frame, text="Status: -"),
-            'last_seen': ttk.Label(info_frame, text="Last Seen: -"),
-            'notes': ttk.Label(info_frame, text="Notes: -")
-        }
-        
-        for i, (key, label) in enumerate(self.device_info.items()):
-            label.grid(row=i, column=0, sticky="w", pady=2)
-        
-        # Device controls frame
-        controls_frame = ttk.LabelFrame(right_panel, text="Device Controls", padding=10)
-        controls_frame.grid(row=1, column=0, sticky="nsew", pady=(0, 5))
-        
-        # Bind device selection event
-        self.device_tree.bind('<<TreeviewSelect>>', self.on_device_select)
-        self.device_listbox.bind('<<ListboxSelect>>', self.on_device_type_select)
-        
-        # Initialize database
-        self.init_iot_database()
-        
-        # Initial sync with remote database
-        self.sync_iot_devices()
-        
-    def init_iot_database(self):
-        """Initialize SQLite database for IoT devices"""
-        db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'iot_devices.db')
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
-        
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        
-        # Create devices table with all required columns
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS devices (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                ip TEXT NOT NULL,
-                port INTEGER,
-                device_type TEXT NOT NULL,
-                device_name TEXT,
-                location TEXT,
-                status TEXT,
-                last_seen TIMESTAMP,
-                notes TEXT
-            )
-        ''')
-        
-        # Check if we need to migrate existing data
-        try:
-            # Try to access the new columns
-            cursor.execute('SELECT device_name, location FROM devices LIMIT 1')
-        except sqlite3.OperationalError:
-            # If columns don't exist, add them
-            try:
-                cursor.execute('ALTER TABLE devices ADD COLUMN device_name TEXT')
-                cursor.execute('ALTER TABLE devices ADD COLUMN location TEXT')
-                print("Successfully migrated database to include new columns")
-            except sqlite3.OperationalError as e:
-                print(f"Error during database migration: {e}")
-        
-        conn.commit()
-        conn.close()
-        
-    def show_add_device_dialog(self):
-        """Show dialog to add a new device"""
-        # Get device types from listbox
-        device_types = [self.device_listbox.get(i) for i in range(self.device_listbox.size())]
-        
-        # Create and show dialog
-        AddDeviceIoTDialog(
-            self.root,
-            device_types,
-            on_device_added=lambda ip, type, status, last_seen: self.device_tree.insert(
-                '', 'end', values=(ip, type, status, last_seen)
-            )
-        )
+        # Status bar for query results
+        self.query_status = ttk.Label(iot_frame, text="Ready", relief=tk.SUNKEN, anchor=tk.W)
+        self.query_status.grid(row=2, column=0, sticky="ew", padx=5, pady=2)
 
-    def on_device_select(self, event):
-        """Handle device selection in the treeview"""
-        selection = self.device_tree.selection()
+    def execute_query(self):
+        """Execute the search query in a background thread and update the UI in the main thread"""
+        def do_query():
+            try:
+                server = self.server_var.get().strip()
+                status = self.status_var.get().strip()
+                content = self.content_var.get().strip()
+                try:
+                    limit = int(self.limit_var.get())
+                    if limit <= 0:
+                        limit = 40
+                except Exception:
+                    limit = 40
+                query_parts = []
+                if server:
+                    query_parts.append(f"server={server}")
+                if status:
+                    query_parts.append(f"status_code={status}")
+                if content:
+                    query_parts.append(f"content={content}")
+                query_parts.append(f"limit={limit}")
+                query_url = f"http://silverflag.net:8000/api/hosts?{'&'.join(query_parts)}"
+                response = requests.get(query_url)
+                if response.status_code == 200:
+                    data = response.json()
+                    results = [
+                        (
+                            item.get('ip', ''),
+                            item.get('server', ''),
+                            item.get('status_code', ''),
+                            item.get('title', '')[:50] + '...' if len(item.get('title', '')) > 50 else item.get('title', '')
+                        )
+                        for item in data.get('data', [])
+                    ]
+                    status_text = f"Found {len(results)} results"
+                else:
+                    results = []
+                    status_text = f"Error: {response.status_code}"
+            except Exception as e:
+                results = []
+                status_text = f"Error: {str(e)}"
+            # Pass results to main thread
+            self.root.after(0, lambda: self.update_query_results(results, status_text))
+
+        # Set status and clear tree in main thread
+        self.query_status.config(text="Searching...")
+        self.query_tree.delete(*self.query_tree.get_children())
+        # Start background thread
+        threading.Thread(target=do_query, daemon=True).start()
+
+    def update_query_results(self, results, status_text):
+        """Update the Treeview and status bar with results (runs in main thread)"""
+        self.query_tree.delete(*self.query_tree.get_children())
+        for idx, row in enumerate(results):
+            tag = 'evenrow' if idx % 2 == 0 else 'oddrow'
+            self.query_tree.insert('', 'end', values=row, tags=(tag,))
+        self.query_tree.tag_configure('evenrow', background='#23272b')
+        self.query_tree.tag_configure('oddrow', background='#2b2b2b')
+        self.query_status.config(text=status_text)
+
+    def on_result_select(self, event):
+        """Handle result selection"""
+        selection = self.query_tree.selection()
         if not selection:
             return
             
         item = selection[0]
-        values = self.device_tree.item(item)['values']
+        ip = self.query_tree.item(item)['values'][0]
         
-        # Update device info
-        self.device_info['ip'].config(text=f"IP: {values[0]}")
-        self.device_info['type'].config(text=f"Type: {values[1]}")
-        self.device_info['status'].config(text=f"Status: {values[2]}")
-        self.device_info['last_seen'].config(text=f"Last Seen: {values[3]}")
+        # Create popup menu
+        menu = tk.Menu(self.root, tearoff=0)
+        menu.add_command(label="Open in Browser", 
+                        command=lambda: webbrowser.open(f"http://{ip}"))
+        menu.add_command(label="Open in IPInfo", 
+                        command=lambda: webbrowser.open(f"https://ipinfo.io/{ip}"))
+        menu.add_command(label="Deep Analysis", 
+                        command=lambda: self.analyze_host(ip))
         
-        # Get additional info from database
+        # Show menu at mouse position
         try:
-            conn = sqlite3.connect(os.path.join(os.path.dirname(__file__), '..', 'data', 'iot_devices.db'))
-            cursor = conn.cursor()
-            cursor.execute('SELECT notes FROM devices WHERE ip = ?', (values[0],))
-            result = cursor.fetchone()
-            conn.close()
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+
+    def analyze_host(self, ip=None):
+        """Perform deep analysis of a host"""
+        # Get IP from selection if not provided
+        if ip is None:
+            selection = self.tree.selection()
+            if not selection:
+                messagebox.showwarning("No Selection", "Please select a camera first.")
+                return
+            item_id = selection[0]
+            if item_id not in self.camera_data:
+                return
+            ip = self.camera_data[item_id]['ip']
+        
+        # Create analysis window
+        analysis_window = tk.Toplevel(self.root)
+        analysis_window.title(f"Analysis: {ip}")
+        analysis_window.geometry("1000x800")  # Increased window size
+        
+        # Apply theme
+        try:
+            from ttkthemes import ThemedTk
+            style = ttk.Style()
+            style.theme_use('arc')  # Modern theme
+        except:
+            pass  # Fall back to default theme if ttkthemes is not available
+        
+        # Make it modal but don't block the main window
+        analysis_window.transient(self.root)
+        analysis_window.grab_set()
+        
+        # Create main container with padding
+        main_frame = ttk.Frame(analysis_window, padding=10)
+        main_frame.pack(fill="both", expand=True)
+        
+        # Create progress frame
+        progress_frame = ttk.Frame(main_frame)
+        progress_frame.pack(fill="x", pady=(0, 10))
+        
+        analysis_progress = ttk.Progressbar(progress_frame, mode='determinate')
+        analysis_progress.pack(fill="x", pady=5)
+        
+        analysis_status = ttk.Label(progress_frame, text="Initializing...")
+        analysis_status.pack(fill="x")
+        
+        # Create notebook for different views
+        notebook = ttk.Notebook(main_frame)
+        notebook.pack(fill="both", expand=True)
+        
+        # Create Summary tab
+        summary_frame = ttk.Frame(notebook)
+        notebook.add(summary_frame, text="Summary")
+        
+        # Create text widget for summary with custom font
+        summary_text = tk.Text(summary_frame, wrap="word", font=('Consolas', 10))
+        summary_scroll = ttk.Scrollbar(summary_frame, orient="vertical", command=summary_text.yview)
+        summary_text.configure(yscrollcommand=summary_scroll.set)
+        
+        # Pack summary widgets
+        summary_scroll.pack(side="right", fill="y")
+        summary_text.pack(side="left", fill="both", expand=True)
+        
+        # Create JSON View tab
+        json_frame = ttk.Frame(notebook)
+        notebook.add(json_frame, text="JSON View")
+        
+        # Create text widget with scrollbar for JSON
+        json_text = tk.Text(json_frame, wrap="none", font=('Consolas', 10))
+        json_scroll_y = ttk.Scrollbar(json_frame, orient="vertical", command=json_text.yview)
+        json_scroll_x = ttk.Scrollbar(json_frame, orient="horizontal", command=json_text.xview)
+        json_text.configure(yscrollcommand=json_scroll_y.set, xscrollcommand=json_scroll_x.set)
+        
+        # Pack scrollbars and text widget
+        json_scroll_y.pack(side="right", fill="y")
+        json_scroll_x.pack(side="bottom", fill="x")
+        json_text.pack(side="left", fill="both", expand=True)
+        
+        # Create Screenshot tab
+        screenshot_frame = ttk.Frame(notebook)
+        notebook.add(screenshot_frame, text="Screenshot")
+        
+        # Create canvas for screenshot
+        screenshot_canvas = tk.Canvas(screenshot_frame, bg='white')
+        screenshot_scroll_y = ttk.Scrollbar(screenshot_frame, orient="vertical", command=screenshot_canvas.yview)
+        screenshot_scroll_x = ttk.Scrollbar(screenshot_frame, orient="horizontal", command=screenshot_canvas.xview)
+        screenshot_canvas.configure(yscrollcommand=screenshot_scroll_y.set, xscrollcommand=screenshot_scroll_x.set)
+        
+        # Pack screenshot widgets
+        screenshot_scroll_y.pack(side="right", fill="y")
+        screenshot_scroll_x.pack(side="bottom", fill="x")
+        screenshot_canvas.pack(side="left", fill="both", expand=True)
+        
+        def progress_callback(message, percent):
+            analysis_progress['value'] = percent
+            analysis_status.config(text=message)
+            analysis_window.update()
+        
+        def format_json(json_str):
+            """Format JSON string with syntax highlighting"""
+            formatted = ""
+            indent = 0
+            in_string = False
+            escape = False
             
-            if result:
-                self.device_info['notes'].config(text=f"Notes: {result[0]}")
+            for char in json_str:
+                if escape:
+                    formatted += char
+                    escape = False
+                    continue
+                    
+                if char == '\\':
+                    escape = True
+                    formatted += char
+                    continue
+                    
+                if char == '"' and not escape:
+                    in_string = not in_string
+                    formatted += char
+                    continue
+                    
+                if not in_string:
+                    if char in '{[':
+                        indent += 2
+                        formatted += char + '\n' + ' ' * indent
+                    elif char in '}]':
+                        indent -= 2
+                        formatted += '\n' + ' ' * indent + char
+                    elif char == ',':
+                        formatted += char + '\n' + ' ' * indent
+                    else:
+                        formatted += char
+                else:
+                    formatted += char
+            
+            return formatted
+        
+        def create_summary(results):
+            """Create a human-readable summary of the analysis results"""
+            summary = []
+            
+            # Basic Information
+            summary.append("=== Basic Information ===")
+            summary.append(f"IP Address: {results.get('ip', 'Unknown')}")
+            summary.append(f"Analysis Time: {datetime.fromtimestamp(results.get('timestamp', 0)).strftime('%Y-%m-%d %H:%M:%S')}")
+            summary.append("")
+            
+            # DNS Information
+            summary.append("=== DNS Information ===")
+            dns_info = results.get('dns_info', {})
+            summary.append(f"Hostname: {dns_info.get('hostname', 'Unknown')}")
+            summary.append(f"Reverse DNS: {dns_info.get('reverse_dns', 'Unknown')}")
+            if dns_info.get('aliases'):
+                summary.append("Aliases:")
+                for alias in dns_info['aliases']:
+                    summary.append(f"  - {alias}")
+            summary.append("")
+            
+            # Network Information
+            summary.append("=== Network Information ===")
+            network_info = results.get('network_info', {})
+            summary.append(f"IP Version: IPv{network_info.get('version', 'Unknown')}")
+            summary.append(f"Private IP: {'Yes' if network_info.get('is_private') else 'No'}")
+            summary.append(f"Global IP: {'Yes' if network_info.get('is_global') else 'No'}")
+            summary.append(f"Loopback: {'Yes' if network_info.get('is_loopback') else 'No'}")
+            summary.append(f"Multicast: {'Yes' if network_info.get('is_multicast') else 'No'}")
+            summary.append(f"Reserved: {'Yes' if network_info.get('is_reserved') else 'No'}")
+            summary.append("")
+            
+            # Port Information
+            summary.append("=== Open Ports ===")
+            ports = results.get('ports', [])
+            if ports:
+                for port in ports:
+                    summary.append(f"Port {port['port']}: {port['service']} ({port['state']})")
             else:
-                self.device_info['notes'].config(text="Notes: -")
-        except Exception as e:
-            print(f"Error fetching device notes: {e}")
-            self.device_info['notes'].config(text="Notes: Error loading")
-        
-    def on_device_type_select(self, event):
-        """Handle device type selection in the listbox"""
-        selection = self.device_listbox.curselection()
-        if not selection:
-            return
+                summary.append("No open ports found")
+            summary.append("")
             
-        device_type = self.device_listbox.get(selection[0])
-        
-        # Clear current items
-        for item in self.device_tree.get_children():
-            self.device_tree.delete(item)
-        
-        # Load devices of selected type from database
-        try:
-            conn = sqlite3.connect(os.path.join(os.path.dirname(__file__), '..', 'data', 'iot_devices.db'))
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT ip, port, device_type, status, last_seen
-                FROM devices
-                WHERE device_type = ?
-            ''', (device_type,))
+            # HTTP Information
+            summary.append("=== HTTP Information ===")
+            http_info = results.get('http_info', {})
+            if http_info:
+                summary.append(f"Status Code: {http_info.get('status_code', 'Unknown')}")
+                summary.append(f"Server: {http_info.get('server', 'Unknown')}")
+                summary.append(f"Content Type: {http_info.get('content_type', 'Unknown')}")
+                summary.append(f"Content Length: {http_info.get('content_length', 'Unknown')}")
+            else:
+                summary.append("No HTTP information available")
+            summary.append("")
             
-            for row in cursor.fetchall():
-                self.device_tree.insert('', 'end', values=(
-                    f"{row[0]}:{row[1]}",
-                    row[2],
-                    row[3],
-                    row[4]
-                ))
+            # Content Analysis
+            summary.append("=== Content Analysis ===")
+            content = results.get('content_analysis', {})
+            if 'error' not in content:
+                summary.append(f"Title: {content.get('title', 'Unknown')}")
+                summary.append(f"Description: {content.get('description', 'Unknown')}")
+                summary.append("\nElement Counts:")
+                for element, count in content.get('element_counts', {}).items():
+                    summary.append(f"  {element.title()}: {count}")
+            else:
+                summary.append(f"Error: {content.get('error', 'Unknown error')}")
+            summary.append("")
             
-            conn.close()
-        except Exception as e:
-            print(f"Error loading devices: {e}")
+            # SSL Information
+            summary.append("=== SSL Certificate Information ===")
+            ssl_info = results.get('ssl_info', {})
+            if ssl_info:
+                summary.append("Issuer:")
+                for key, value in ssl_info.get('issuer', {}).items():
+                    summary.append(f"  {key}: {value}")
+                summary.append("\nSubject:")
+                for key, value in ssl_info.get('subject', {}).items():
+                    summary.append(f"  {key}: {value}")
+                summary.append(f"\nValid From: {ssl_info.get('not_before', 'Unknown')}")
+                summary.append(f"Valid Until: {ssl_info.get('not_after', 'Unknown')}")
+            else:
+                summary.append("No SSL certificate information available")
+            summary.append("")
+            
+            # Security Information
+            summary.append("=== Security Information ===")
+            security_info = results.get('security_info', {})
+            if 'error' not in security_info:
+                summary.append("Security Headers:")
+                for header, value in security_info.get('security_headers', {}).items():
+                    summary.append(f"  {header}: {value}")
+            else:
+                summary.append(f"Error: {security_info.get('error', 'Unknown error')}")
+            summary.append("")
+            
+            # Technology Stack
+            summary.append("=== Detected Technologies ===")
+            tech_stack = results.get('tech_stack', [])
+            if tech_stack:
+                for tech in tech_stack:
+                    summary.append(f"- {tech}")
+            else:
+                summary.append("No technologies detected")
+            
+            return '\n'.join(summary)
+        
+        def capture_screenshot(url):
+            """Capture a screenshot of the webpage using Playwright"""
+            try:
+                import asyncio
+                from playwright.async_api import async_playwright
+                
+                async def _capture():
+                    async with async_playwright() as p:
+                        browser = await p.chromium.launch()
+                        page = await browser.new_page()
+                        await page.goto(url, wait_until='networkidle')
+                        
+                        # Get page dimensions
+                        dimensions = await page.evaluate('''() => {
+                            return {
+                                width: Math.max(document.documentElement.clientWidth, document.body.scrollWidth),
+                                height: Math.max(document.documentElement.clientHeight, document.body.scrollHeight)
+                            }
+                        }''')
+                        
+                        # Set viewport size
+                        await page.set_viewport_size(dimensions)
+                        
+                        # Take screenshot
+                        screenshot = await page.screenshot()
+                        await browser.close()
+                        
+                        return screenshot, dimensions
+                
+                # Create new event loop for this thread
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    screenshot_data, dimensions = loop.run_until_complete(_capture())
+                    return screenshot_data, dimensions
+                finally:
+                    loop.close()
+                    
+            except Exception as e:
+                print(f"Screenshot error: {e}")
+                return None, None
+        
+        def display_screenshot(screenshot_data, dimensions):
+            """Display the screenshot in the canvas"""
+            if screenshot_data and dimensions:
+                # Convert screenshot to PhotoImage
+                image = Image.open(io.BytesIO(screenshot_data))
+                photo = ImageTk.PhotoImage(image)
+                
+                # Update canvas
+                screenshot_canvas.delete("all")
+                screenshot_canvas.create_image(0, 0, anchor="nw", image=photo)
+                screenshot_canvas.configure(scrollregion=(0, 0, dimensions['width'], dimensions['height']))
+                
+                # Keep reference to prevent garbage collection
+                screenshot_canvas.image = photo
+        
+        def run_analysis():
+            try:
+                from backend.analyzehost import analyze_host
+                results = analyze_host(ip, progress_callback)
+                
+                # Format and display JSON
+                formatted_json = format_json(json.dumps(results, indent=2))
+                json_text.delete('1.0', tk.END)
+                json_text.insert('1.0', formatted_json)
+                json_text.config(state='disabled')
+                
+                # Create and display summary
+                summary = create_summary(results)
+                summary_text.delete('1.0', tk.END)
+                summary_text.insert('1.0', summary)
+                summary_text.config(state='disabled')
+                
+                # Capture and display screenshot if HTTP info is available
+                http_info = results.get('http_info', {})
+                if http_info and http_info.get('status_code') == 200:
+                    progress_callback("Capturing webpage screenshot...", 90)
+                    url = f"http://{ip}"
+                    screenshot_data, dimensions = capture_screenshot(url)
+                    if screenshot_data:
+                        display_screenshot(screenshot_data, dimensions)
+                
+            except Exception as e:
+                error_msg = f"Error during analysis: {str(e)}"
+                json_text.delete('1.0', tk.END)
+                json_text.insert('1.0', error_msg)
+                json_text.config(state='disabled')
+                summary_text.delete('1.0', tk.END)
+                summary_text.insert('1.0', error_msg)
+                summary_text.config(state='disabled')
+        
+        # Run analysis in separate thread
+        threading.Thread(target=run_analysis, daemon=True).start()
+        
+        # Add close button
+        close_button = ttk.Button(main_frame, text="Close", command=analysis_window.destroy)
+        close_button.pack(pady=10)
+        
+        # Bind ESC key to close
+        analysis_window.bind('<Escape>', lambda e: analysis_window.destroy())
 
     def create_map_view(self):
         map_frame = ttk.Frame(self.notebook)
@@ -1356,7 +1633,6 @@ class MainGUI:
             base_ip = ip
         
         # Open in browser
-        import webbrowser
         webbrowser.open(f"http://{base_ip}")
 
     def show_camera_on_map(self):
@@ -1486,7 +1762,6 @@ class MainGUI:
         base_ip = base_ip.split(':')[0] if ':' in base_ip else base_ip
         
         # Open in browser
-        import webbrowser
         webbrowser.open(f"https://ipinfo.io/{base_ip}")
 
     def create_list_view(self):
@@ -1574,25 +1849,31 @@ class MainGUI:
                                 width=40, anchor='center')
         self.image_label.grid(row=0, column=0, pady=20, ipady=50)
         
-        # Camera controls frame
-        controls_frame = ttk.LabelFrame(right_panel, text="Camera Controls", padding=10)
-        controls_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        # Quick Actions Frame
+        quick_actions_frame = ttk.LabelFrame(right_panel, text="Quick Actions", padding=10)
+        quick_actions_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
         
-        # Create buttons
-        ttk.Button(controls_frame, text="Favourite Camera", 
-                  command=self.favourite_camera).grid(row=0, column=0, padx=5, pady=5)
-        ttk.Button(controls_frame, text="Move Camera", 
-                  command=self.open_move_camera_window).grid(row=0, column=1, padx=5, pady=5)
-        ttk.Button(controls_frame, text="Open in Browser", 
-                  command=self.open_camera_in_browser).grid(row=0, column=2, padx=5, pady=5)
-        ttk.Button(controls_frame, text="Get IPINFO", 
-                  command=self.get_ip_info).grid(row=0, column=3, padx=5, pady=5)
-        ttk.Button(controls_frame, text="Show on Map", 
-                  command=self.show_camera_on_map).grid(row=0, column=4, padx=5, pady=5)
-        ttk.Button(controls_frame, text="Open Stream", 
-                  command=self.open_camera_stream).grid(row=0, column=5, padx=5, pady=5)
-        ttk.Button(controls_frame, text="Open in IPINFO", 
-                  command=self.open_in_ipinfo).grid(row=0, column=6, padx=5, pady=5)
+        # Create quick action buttons in a grid
+        actions = [
+            ("Deep Analysis", self.analyze_host),
+            ("Open Stream", self.open_camera_stream),
+            ("Show on Map", self.show_camera_on_map),
+            ("Open in Browser", self.open_camera_in_browser),
+            ("Get IP Info", self.get_ip_info),
+            ("Open in IPInfo", self.open_in_ipinfo),
+            ("Move Camera", self.open_move_camera_window)
+        ]
+        
+        # Create buttons in a grid layout
+        for i, (text, command) in enumerate(actions):
+            row = i // 2
+            col = i % 2
+            btn = ttk.Button(quick_actions_frame, text=text, command=command)
+            btn.grid(row=row, column=col, padx=5, pady=5, sticky="ew")
+        
+        # Configure grid weights for even spacing
+        quick_actions_frame.grid_columnconfigure(0, weight=1)
+        quick_actions_frame.grid_columnconfigure(1, weight=1)
         
         # Properties frame
         self.properties_frame = ttk.LabelFrame(right_panel, text="Properties", padding=10)
