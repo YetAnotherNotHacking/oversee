@@ -59,6 +59,10 @@ oversee-main/
 ├── cam_movement_reversing.md         # Trying to add functionality to the move feature
 ├── prepforcommit.sh                  # OLD DO NOT USE IT
 ├── .gitignore                        # ... Obv its git ignore?
+├── website/                          # All things that are in the website or the showdan project
+│   ├── gui/                          # All GUI related code
+│   ├── gui/                          # All GUI related code
+│   ├── gui/                          # All GUI related code
 ├── src/
 │   │   ├── maingui.py                # Main GUI implementation
 │   ├── gui/                          # All GUI related code
