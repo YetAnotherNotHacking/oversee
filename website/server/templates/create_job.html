@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Create Job - Oversee Scanner{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h2 mb-4">Create New Scan Job</h1>
+
+    <div class="card">
+        <div class="card-body">
+            {% if error %}
+            <div class="alert alert-danger" role="alert">
+                {{ error }}
+            </div>
+            {% endif %}
+
+            <form method="POST" action="/create-job">
+                <div class="mb-3">
+                    <label for="cidr_block" class="form-label">CIDR Block</label>
+                    <input type="text" class="form-control" id="cidr_block" name="cidr_block" required
+                           placeholder="e.g., 192.168.1.0/24">
+                    <div class="form-text">Enter a valid CIDR block (e.g., 192.168.1.0/24)</div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="ports" class="form-label">Ports</label>
+                    <input type="text" class="form-control" id="ports" name="ports" required
+                           placeholder="e.g., 80,443,22,21">
+                    <div class="form-text">Enter comma-separated ports (e.g., 80,443,22,21)</div>
+                </div>
+
+                <div class="mb-3">
+                    <h5>Common Ports</h5>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-secondary" onclick="addPorts('80,443')">Web</button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="addPorts('22,21')">SSH/FTP</button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="addPorts('25,110,143')">Mail</button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="addPorts('3306,5432,27017')">Database</button>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Create Job</button>
+                <a href="/jobs" class="btn btn-secondary">Cancel</a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function addPorts(ports) {
+        const currentPorts = document.getElementById('ports').value;
+        const newPorts = currentPorts ? currentPorts + ',' + ports : ports;
+        document.getElementById('ports').value = newPorts;
+    }
+</script>
+{% endblock %} 
