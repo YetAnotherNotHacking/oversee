@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Oversee Scanner{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h2 mb-4">Dashboard</h1>
+    
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Total Jobs</h5>
+                    <p class="card-text display-4">{{ total_jobs }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Completed Jobs</h5>
+                    <p class="card-text display-4">{{ completed_jobs }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Active Workers</h5>
+                    <p class="card-text display-4">{{ active_workers }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Total Results</h5>
+                    <p class="card-text display-4">{{ total_results }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Jobs -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Recent Jobs</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>CIDR Block</th>
+                                    <th>Status</th>
+                                    <th>Created</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for job in recent_jobs %}
+                                <tr>
+                                    <td>{{ job.id }}</td>
+                                    <td>{{ job.cidr_block }}</td>
+                                    <td>
+                                        <span class="badge {% if job.status == 'completed' %}bg-success{% elif job.status == 'in_progress' %}bg-warning{% else %}bg-secondary{% endif %}">
+                                            {{ job.status }}
+                                        </span>
+                                    </td>
+                                    <td>{{ job.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Workers -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Active Workers</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Worker ID</th>
+                                    <th>Last Heartbeat</th>
+                                    <th>Current Job</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for worker in workers %}
+                                <tr>
+                                    <td>{{ worker.id }}</td>
+                                    <td>{{ worker.last_heartbeat.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                    <td>{{ worker.current_job_id or 'None' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Auto-refresh dashboard every 30 seconds
+    setTimeout(function() {
+        window.location.reload();
+    }, 30000);
+</script>
+{% endblock %} 
