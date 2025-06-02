@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}Results - Oversee Scanner{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h2 mb-4">Scan Results</h1>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped" id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>IP Address</th>
+                            <th>Port</th>
+                            <th>Protocol</th>
+                            <th>Banner</th>
+                            <th>Discovered</th>
+                            <th>Job ID</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for result in results %}
+                        <tr>
+                            <td>{{ result.id }}</td>
+                            <td>{{ result.ip_address }}</td>
+                            <td>{{ result.port }}</td>
+                            <td>{{ result.protocol or 'Unknown' }}</td>
+                            <td>
+                                {% if result.banner %}
+                                <button type="button" class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#bannerModal{{ result.id }}">
+                                    View Banner
+                                </button>
+                                {% else %}
+                                None
+                                {% endif %}
+                            </td>
+                            <td>{{ result.discovered_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td>{{ result.scan_job_id }}</td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#detailsModal{{ result.id }}">
+                                    Details
+                                </button>
+                            </td>
+                        </tr>
+
+                        <!-- Banner Modal -->
+                        <div class="modal fade" id="bannerModal{{ result.id }}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Banner for {{ result.ip_address }}:{{ result.port }}</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <pre>{{ result.banner }}</pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Details Modal -->
+                        <div class="modal fade" id="detailsModal{{ result.id }}" tabindex="-1">
+                            <div class="modal-dialog modal-lg">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Details for {{ result.ip_address }}:{{ result.port }}</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <h6>Headers</h6>
+                                        {% if result.headers %}
+                                        <pre>{{ result.headers | tojson(indent=2) }}</pre>
+                                        {% else %}
+                                        <p>No headers available</p>
+                                        {% endif %}
+
+                                        <h6>Metadata</h6>
+                                        {% if result.scan_metadata %}
+                                        <pre>{{ result.scan_metadata | tojson(indent=2) }}</pre>
+                                        {% else %}
+                                        <p>No metadata available</p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        $('#resultsTable').DataTable({
+            order: [[5, 'desc']],
+            pageLength: 25
+        });
+    });
+</script>
+{% endblock %} 
