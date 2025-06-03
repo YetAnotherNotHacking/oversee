@@ -24,10 +24,10 @@ from concurrent.futures import ThreadPoolExecutor
 import queue
 import requests
 from gui.aboutgui import AboutGUI
-from gui.adddeviceiotgui import AddDeviceIoTDialog
 import json
 import webbrowser
 import io
+import socket
 
 ip_list_file = settings.ip_list_file
 
@@ -312,7 +312,6 @@ class MainGUI:
         # Create category tabs
         self.create_cameras_tab()
         self.create_printers_tab()
-        self.create_iot_tab()
         
         # Create status bar
         self.create_status_bar()
@@ -360,28 +359,6 @@ class MainGUI:
         )
         placeholder_label.pack(expand=True)
         
-    def create_iot_tab(self):
-        """Create the IoT tab"""
-        iot_frame = ttk.Frame(self.main_notebook)
-        self.main_notebook.add(iot_frame, text="IoT")
-        
-        # Configure grid for iot frame
-        iot_frame.grid_rowconfigure(0, weight=1)
-        iot_frame.grid_columnconfigure(0, weight=1)
-        
-        # Create content frame
-        content_frame = ttk.Frame(iot_frame)
-        content_frame.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
-        
-        # Add placeholder content
-        placeholder_label = ttk.Label(
-            content_frame,
-            text="IoT device management functionality coming soon...",
-            justify='center',
-            font=('Arial', 12)
-        )
-        placeholder_label.pack(expand=True)
-
     def create_map_view(self):
         map_frame = ttk.Frame(self.notebook)
         self.notebook.add(map_frame, text="Map View")
@@ -1499,27 +1476,153 @@ class MainGUI:
         # Destroy the root window
         self.root.destroy()
 
-    def sync_iot_devices(self):
-        """Sync devices from remote database"""
-        try:
-            from backend.remotedb import RemoteDatabase
+    def analyze_host(self):
+        """Analyze the selected camera for vulnerabilities and information"""
+        selection = self.tree.selection()
+        if not selection:
+            messagebox.showwarning("No Selection", "Please select a camera first.")
+            return
             
-            # Create remote database connection
-            remote_db = RemoteDatabase()
+        item_id = selection[0]
+        if item_id not in self.camera_data:
+            return
             
-            # Get local database path
-            db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'iot_devices.db')
-            
-            # Sync devices
-            if remote_db.sync_devices(db_path):
-                # Refresh device list
-                self.on_device_type_select(None)
-                messagebox.showinfo("Success", "Devices synchronized successfully")
-            else:
-                messagebox.showerror("Error", "Failed to synchronize devices")
+        camera_info = self.camera_data[item_id]
+        ip = camera_info['ip']
+        
+        # Extract base IP without endpoint or port
+        base_ip = ip.split('/')[0] if '/' in ip else ip
+        base_ip = base_ip.split(':')[0] if ':' in base_ip else base_ip
+        
+        # Create new window for analysis
+        analysis_window = tk.Toplevel(self.root)
+        analysis_window.title(f"Deep Analysis: {base_ip}")
+        analysis_window.geometry("600x400")
+        
+        # Make it modal
+        analysis_window.transient(self.root)
+        analysis_window.grab_set()
+        
+        # Center the window
+        analysis_window.update_idletasks()
+        x = (analysis_window.winfo_screenwidth() // 2) - (600 // 2)
+        y = (analysis_window.winfo_screenheight() // 2) - (400 // 2)
+        analysis_window.geometry(f"600x400+{x}+{y}")
+        
+        # Create main frame with padding
+        main_frame = ttk.Frame(analysis_window, padding="10")
+        main_frame.pack(fill="both", expand=True)
+        
+        # Add progress bar
+        progress_frame = ttk.Frame(main_frame)
+        progress_frame.pack(fill="x", pady=(0, 10))
+        
+        progress_var = tk.DoubleVar()
+        progress_bar = ttk.Progressbar(progress_frame, variable=progress_var, maximum=100)
+        progress_bar.pack(side="left", fill="x", expand=True)
+        
+        # Add status label
+        status_label = ttk.Label(progress_frame, text="Starting analysis...")
+        status_label.pack(side="right", padx=5)
+        
+        # Add text widget for results
+        text_widget = tk.Text(main_frame, wrap="word", height=15)
+        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=text_widget.yview)
+        text_widget.configure(yscrollcommand=scrollbar.set)
+        
+        # Pack widgets
+        text_widget.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        def update_progress(value, status):
+            progress_var.set(value)
+            status_label.config(text=status)
+            analysis_window.update()
+        
+        def run_analysis():
+            try:
+                # Basic port scan
+                update_progress(10, "Scanning common ports...")
+                text_widget.insert("end", "=== Port Scan Results ===\n")
                 
-        except Exception as e:
-            messagebox.showerror("Error", f"Error syncing devices: {str(e)}")
+                common_ports = [80, 443, 554, 8080, 8000, 37777, 37778, 37779]
+                for port in common_ports:
+                    try:
+                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        sock.settimeout(1)
+                        result = sock.connect_ex((base_ip, port))
+                        if result == 0:
+                            text_widget.insert("end", f"Port {port}: Open\n")
+                        sock.close()
+                    except:
+                        pass
+                
+                # HTTP/HTTPS analysis
+                update_progress(30, "Analyzing web services...")
+                text_widget.insert("end", "\n=== Web Service Analysis ===\n")
+                
+                for protocol in ['http', 'https']:
+                    try:
+                        url = f"{protocol}://{base_ip}"
+                        response = requests.get(url, timeout=2)
+                        text_widget.insert("end", f"\n{protocol.upper()} Service:\n")
+                        text_widget.insert("end", f"Status Code: {response.status_code}\n")
+                        text_widget.insert("end", f"Server: {response.headers.get('Server', 'Unknown')}\n")
+                    except:
+                        pass
+                
+                # RTSP analysis
+                update_progress(50, "Checking RTSP services...")
+                text_widget.insert("end", "\n=== RTSP Analysis ===\n")
+                
+                rtsp_ports = [554, 8554]
+                for port in rtsp_ports:
+                    try:
+                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        sock.settimeout(1)
+                        result = sock.connect_ex((base_ip, port))
+                        if result == 0:
+                            text_widget.insert("end", f"RTSP port {port}: Open\n")
+                        sock.close()
+                    except:
+                        pass
+                
+                # ONVIF analysis
+                update_progress(70, "Checking ONVIF services...")
+                text_widget.insert("end", "\n=== ONVIF Analysis ===\n")
+                
+                try:
+                    url = f"http://{base_ip}/onvif/device_service"
+                    response = requests.get(url, timeout=2)
+                    if response.status_code == 200:
+                        text_widget.insert("end", "ONVIF service detected\n")
+                except:
+                    pass
+                
+                # Final analysis
+                update_progress(90, "Finalizing analysis...")
+                text_widget.insert("end", "\n=== Summary ===\n")
+                text_widget.insert("end", f"IP Address: {base_ip}\n")
+                text_widget.insert("end", f"Analysis Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                
+                update_progress(100, "Analysis complete!")
+                
+            except Exception as e:
+                text_widget.insert("end", f"\nError during analysis: {str(e)}")
+                update_progress(100, "Analysis failed!")
+            
+            # Make text read-only
+            text_widget.configure(state="disabled")
+        
+        # Start analysis in a separate thread
+        threading.Thread(target=run_analysis, daemon=True).start()
+        
+        # Add close button
+        close_button = ttk.Button(analysis_window, text="Close", command=analysis_window.destroy)
+        close_button.pack(pady=10)
+        
+        # Bind ESC key to close
+        analysis_window.bind('<Escape>', lambda e: analysis_window.destroy())
 
 
 def runmaingui():
