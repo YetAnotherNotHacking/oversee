@@ -36,14 +36,6 @@ class FocusedStreamWindow:
         self.status_label = ttk.Label(main_frame, text="Initializing...")
         self.status_label.grid(row=1, column=0, sticky="ew", pady=(5, 0))
         
-        # Create button frame
-        button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=2, column=0, sticky="ew", pady=(5, 0))
-        
-        # Add IPINFO button
-        ipinfo_button = ttk.Button(button_frame, text="Open in IPINFO", command=self.open_ipinfo)
-        ipinfo_button.pack(side="left", padx=5)
-        
         # Format the camera URL properly with appropriate endpoint and parameters
         if not ip.startswith(('http://', 'rtsp://')):
             # Extract endpoint from IP if it exists
