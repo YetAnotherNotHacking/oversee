@@ -1,220 +1,238 @@
-import requests
-import json
-import uuid
-import time
-import os
-import logging
 import asyncio
-import socket
-import ipaddress
+import aiohttp
+import uuid
+import logging
+import os
+from typing import List, Dict, Any, Optional
 from datetime import datetime
-from typing import Dict, List, Any
-import http.client
-from concurrent.futures import ThreadPoolExecutor
-import argparse
+import ipaddress
+import socket
+import ssl
+import json
+from dotenv import load_dotenv
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-class PortScanner:
-    def __init__(self, rate_limit: int = 1000):
-        self.rate_limit = rate_limit
-        self.semaphore = asyncio.Semaphore(rate_limit)
-        self.executor = ThreadPoolExecutor(max_workers=100)
-    
-    async def scan_port(self, ip: str, port: int, timeout: float = 1.0) -> Dict[str, Any]:
-        """Scan a single port asynchronously"""
-        async with self.semaphore:
-            try:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(timeout)
-                
-                result = await asyncio.get_event_loop().run_in_executor(
-                    self.executor,
-                    lambda: sock.connect_ex((ip, port))
-                )
-                
-                if result == 0:
-                    return {
-                        "ip": ip,
-                        "ports": [{
-                            "port": port,
-                            "proto": "tcp",
-                            "status": "open",
-                            "reason": "syn-ack",
-                            "ttl": 64
-                        }]
-                    }
-                return None
-            except Exception as e:
-                logger.debug(f"Error scanning {ip}:{port}: {str(e)}")
-                return None
-            finally:
-                sock.close()
-    
-    async def scan_ports(self, ip: str, ports: List[int]) -> List[Dict[str, Any]]:
-        """Scan multiple ports on an IP address"""
-        tasks = [self.scan_port(ip, port) for port in ports]
-        results = await asyncio.gather(*tasks)
-        return [r for r in results if r is not None]
-    
-    async def scan_cidr(self, cidr_block: str, ports: List[int]) -> List[Dict[str, Any]]:
-        """Scan all IPs in a CIDR block"""
-        try:
-            network = ipaddress.ip_network(cidr_block)
-            all_results = []
-            
-            # Process IPs in chunks
-            chunk_size = 50
-            for i in range(0, network.num_addresses, chunk_size):
-                chunk = list(network.hosts())[i:i + chunk_size]
-                tasks = [self.scan_ports(str(ip), ports) for ip in chunk]
-                chunk_results = await asyncio.gather(*tasks)
-                all_results.extend([r for sublist in chunk_results for r in sublist])
-                await asyncio.sleep(0.1)  # Small delay between chunks
-            
-            return all_results
-        except Exception as e:
-            logger.error(f"Error scanning CIDR block {cidr_block}: {str(e)}")
-            return []
+# Load environment variables
+load_dotenv()
 
 class ScannerClient:
-    def __init__(self, server_url: str, worker_id: str = None, available_ports: str = None):
-        self.server_url = server_url.rstrip('/')
-        self.worker_id = worker_id or str(uuid.uuid4())
-        self.session = requests.Session()
-        self.current_job = None
-        self.is_running = True
-        self.available_ports = available_ports or "80,443"
-        self.scanner = None  # Will be initialized with server-provided rate limit
+    def __init__(self, server_url: str, available_ports: Optional[List[int]] = None, scan_rate: int = 1000):
+        self.server_url = server_url
+        self.worker_id = str(uuid.uuid4())
+        self.available_ports = available_ports
+        self.scan_rate = scan_rate
+        self.session = None
+        self.is_running = False
 
-    def register(self):
-        """Register with the server"""
+    async def connect(self):
+        """Initialize HTTP session and register with server"""
+        self.session = aiohttp.ClientSession()
+        await self.register()
+
+    async def register(self):
+        """Register this worker with the server"""
         try:
-            response = self.session.post(
+            ports_str = ','.join(map(str, self.available_ports)) if self.available_ports else ''
+            async with self.session.post(
                 f"{self.server_url}/api/register",
                 json={
                     "worker_id": self.worker_id,
-                    "available_ports": self.available_ports
+                    "available_ports": ports_str,
+                    "scan_rate": self.scan_rate
                 }
-            )
-            response.raise_for_status()
-            logger.info(f"Successfully registered as worker {self.worker_id}")
-            return True
+            ) as response:
+                if response.status == 200:
+                    logger.info("Successfully registered with server")
+                else:
+                    logger.error(f"Failed to register with server: {await response.text()}")
         except Exception as e:
-            logger.error(f"Failed to register: {e}")
-            return False
+            logger.error(f"Error registering with server: {str(e)}")
 
-    def send_heartbeat(self):
+    async def send_heartbeat(self):
         """Send heartbeat to server"""
         try:
-            response = self.session.post(
+            ports_str = ','.join(map(str, self.available_ports)) if self.available_ports else ''
+            async with self.session.post(
                 f"{self.server_url}/api/heartbeat",
-                json={"worker_id": self.worker_id}
-            )
-            response.raise_for_status()
-            return True
+                json={
+                    "worker_id": self.worker_id,
+                    "available_ports": ports_str,
+                    "scan_rate": self.scan_rate
+                }
+            ) as response:
+                if response.status != 200:
+                    logger.error(f"Failed to send heartbeat: {await response.text()}")
         except Exception as e:
-            logger.error(f"Failed to send heartbeat: {e}")
-            return False
+            logger.error(f"Error sending heartbeat: {str(e)}")
 
-    def get_job(self) -> Dict[str, Any]:
-        """Get a new job from the server"""
+    async def scan_port(self, ip: str, port: int) -> Dict[str, Any]:
+        """Scan a single port and return results"""
+        result = {
+            "ip": ip,
+            "ports": [{
+                "port": port,
+                "state": "closed",
+                "protocol": None,
+                "banner": None,
+                "headers": None
+            }]
+        }
+
         try:
-            response = self.session.get(
-                f"{self.server_url}/api/job",
-                params={"worker_id": self.worker_id}
-            )
-            response.raise_for_status()
-            job = response.json()
-            self.current_job = job
-            # Initialize scanner with server-provided rate limit
-            self.scanner = PortScanner(rate_limit=job.get('scan_rate', 1000))
-            return job
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 404:
-                logger.info("No jobs available")
-            else:
-                logger.error(f"Failed to get job: {e}")
-            return None
-        except Exception as e:
-            logger.error(f"Failed to get job: {e}")
-            return None
+            # Try TCP connection
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(2)
+            if sock.connect_ex((ip, port)) == 0:
+                result["ports"][0]["state"] = "open"
+                
+                # Try to get banner
+                try:
+                    sock.send(b"GET / HTTP/1.1\r\nHost: " + ip.encode() + b"\r\n\r\n")
+                    banner = sock.recv(1024)
+                    if banner:
+                        result["ports"][0]["banner"] = banner.decode('utf-8', errors='ignore')
+                        
+                        # Try to parse headers if it's HTTP
+                        if b"HTTP/" in banner:
+                            result["ports"][0]["protocol"] = "http"
+                            try:
+                                headers = {}
+                                for line in banner.split(b'\r\n')[1:]:
+                                    if b':' in line:
+                                        key, value = line.split(b':', 1)
+                                        headers[key.decode().strip()] = value.decode().strip()
+                                result["ports"][0]["headers"] = headers
+                            except:
+                                pass
+                except:
+                    pass
 
-    async def run_scan(self, cidr_block: str, ports: str) -> List[Dict[str, Any]]:
-        """Run port scan on the given CIDR block and ports"""
-        try:
-            port_list = [int(p.strip()) for p in ports.split(',')]
-            logger.info(f"Running scan on {cidr_block} for ports {ports}")
-            return await self.scanner.scan_cidr(cidr_block, port_list)
-        except Exception as e:
-            logger.error(f"Error processing scan results: {e}")
-            return []
+                # Try SSL/TLS if it's a common HTTPS port
+                if port in [443, 8443, 9443]:
+                    try:
+                        context = ssl.create_default_context()
+                        with socket.create_connection((ip, port), timeout=2) as sock:
+                            with context.wrap_socket(sock, server_hostname=ip) as ssock:
+                                result["ports"][0]["protocol"] = "https"
+                    except:
+                        pass
 
-    def submit_results(self, results: List[Dict[str, Any]]):
-        """Submit scan results to the server"""
-        if not self.current_job:
-            logger.error("No current job to submit results for")
-            return False
+        except Exception as e:
+            logger.debug(f"Error scanning {ip}:{port}: {str(e)}")
+        finally:
+            sock.close()
+
+        return result
+
+    async def scan_ip(self, ip: str, ports: List[int]) -> List[Dict[str, Any]]:
+        """Scan all specified ports for an IP address"""
+        results = []
+        for port in ports:
+            result = await self.scan_port(ip, port)
+            if result["ports"][0]["state"] == "open":
+                results.append(result)
+            # Respect scan rate
+            await asyncio.sleep(1 / self.scan_rate)
+        return results
+
+    async def process_job(self, job: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Process a scan job and return results"""
+        cidr_block = job["cidr_block"]
+        ports = [int(p) for p in job["ports"].split(',')]
+        scan_rate = job["scan_rate"]
         
+        # Update scan rate if server requests different rate
+        if scan_rate != self.scan_rate:
+            self.scan_rate = scan_rate
+            logger.info(f"Updated scan rate to {scan_rate} ports/second")
+
+        results = []
+        network = ipaddress.ip_network(cidr_block)
+        
+        for ip in network.hosts():
+            ip_results = await self.scan_ip(str(ip), ports)
+            results.extend(ip_results)
+            
+        return results
+
+    async def submit_results(self, scan_id: int, results: List[Dict[str, Any]]):
+        """Submit scan results to server"""
         try:
-            response = self.session.post(
+            async with self.session.post(
                 f"{self.server_url}/api/results",
                 json={
-                    "scan_id": self.current_job["scan_id"],
+                    "scan_id": scan_id,
                     "results": results
                 }
-            )
-            response.raise_for_status()
-            logger.info(f"Successfully submitted results for job {self.current_job['scan_id']}")
-            self.current_job = None
-            return True
+            ) as response:
+                if response.status != 200:
+                    logger.error(f"Failed to submit results: {await response.text()}")
         except Exception as e:
-            logger.error(f"Failed to submit results: {e}")
-            return False
+            logger.error(f"Error submitting results: {str(e)}")
 
-    async def run_async(self):
-        """Main loop for the scanner"""
-        if not self.register():
-            return
-        
+    async def run(self):
+        """Main worker loop"""
+        self.is_running = True
+        await self.connect()
+
         while self.is_running:
             try:
-                self.send_heartbeat()
-                
-                job = self.get_job()
-                if not job:
-                    await asyncio.sleep(10)
-                    continue
-                
-                results = await self.run_scan(job["cidr_block"], job["ports"])
-                if results:
-                    self.submit_results(results)
-                
-                await asyncio.sleep(1)
-                
-            except KeyboardInterrupt:
-                logger.info("Shutting down scanner...")
-                self.is_running = False
-            except Exception as e:
-                logger.error(f"Error in main loop: {e}")
-                await asyncio.sleep(10)
+                # Get new job
+                async with self.session.get(
+                    f"{self.server_url}/api/job",
+                    params={"worker_id": self.worker_id}
+                ) as response:
+                    if response.status == 200:
+                        job = await response.json()
+                        logger.info(f"Received job {job['scan_id']} for {job['cidr_block']}")
+                        
+                        # Process job
+                        results = await self.process_job(job)
+                        logger.info(f"Completed job {job['scan_id']} with {len(results)} results")
+                        
+                        # Submit results
+                        await self.submit_results(job["scan_id"], results)
+                    elif response.status == 404:
+                        logger.info("No jobs available, waiting...")
+                        await asyncio.sleep(5)
+                    else:
+                        logger.error(f"Error getting job: {await response.text()}")
+                        await asyncio.sleep(5)
 
-    def run(self):
-        """Run the scanner"""
-        asyncio.run(self.run_async())
+                # Send heartbeat
+                await self.send_heartbeat()
+                
+            except Exception as e:
+                logger.error(f"Error in main loop: {str(e)}")
+                await asyncio.sleep(5)
+
+    async def stop(self):
+        """Stop the worker"""
+        self.is_running = False
+        if self.session:
+            await self.session.close()
+
+async def main():
+    # Get configuration from environment variables
+    server_url = os.getenv('SERVER_URL', 'http://localhost:8000')
+    available_ports = os.getenv('AVAILABLE_PORTS')
+    if available_ports:
+        available_ports = [int(p.strip()) for p in available_ports.split(',')]
+    scan_rate = int(os.getenv('SCAN_RATE', '1000'))
+
+    # Create and run scanner client
+    client = ScannerClient(server_url, available_ports, scan_rate)
+    try:
+        await client.run()
+    except KeyboardInterrupt:
+        logger.info("Shutting down...")
+        await client.stop()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Network Scanner Client")
-    parser.add_argument("--server", required=True, help="Server URL (e.g., http://your-server:8000)")
-    parser.add_argument("--worker-id", help="Worker ID (optional)")
-    parser.add_argument("--available-ports", default="80,443", help="Comma-separated list of ports this worker can scan (default: 80,443)")
-    
-    args = parser.parse_args()
-    
-    client = ScannerClient(args.server, args.worker_id, args.available_ports)
-    client.run() 
+    asyncio.run(main()) 
