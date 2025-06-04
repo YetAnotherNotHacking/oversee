@@ -16,6 +16,7 @@ import gui
 import settings
 import numpy as np
 from documentationmd.views import documentationviews
+from documentationmd.movements import documentationmovements
 from gui.movementgui import MovementGUI
 from gui.settingsgui import SettingsWindow
 from gui.focusedmapgui import FocusedMapWindow
@@ -30,9 +31,11 @@ import io
 import socket
 
 ip_list_file = settings.ip_list_file
+db2_path = settings.db2_path
 
 # Documentations
 viewtypemarkdown = documentationviews
+movementendpointmarkdown = documentationmovements
 
 class MainGUI:
     def __init__(self, root):
@@ -148,7 +151,7 @@ class MainGUI:
     def init_database(self):
         """Initialize SQLite database for camera status tracking"""
         db_path = settings.cameras_db
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        os.makedirs(os.path.dirname(db2_path), exist_ok=True)
         
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -1033,7 +1036,9 @@ class MainGUI:
         ip = camera_info['ip']
         
         # Extract base IP without endpoint or port
-        base_ip = ip.split('/')[0] if '/' in ip else ip
+        base
+        
+        _ip = ip.split('/')[0] if '/' in ip else ip
         base_ip = base_ip.split(':')[0] if ':' in base_ip else base_ip
         
         # Create new window
@@ -1409,6 +1414,18 @@ class MainGUI:
         advanced_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Advanced", menu=advanced_menu)
         advanced_menu.add_command(label="Reinit all", command=self.reinit_all)
+
+        def open_documentation_movement():
+            show_markdown_docs(movementendpointmarkdown)
+
+        def open_documentation_views():
+            show_markdown_docs(viewtypemarkdown)
+
+        # Documentation dropdown
+        documentation_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Documentation", menu=documentation_menu)
+        documentation_menu.add_command(label="Movement Commands", command=open_documentation_movement)
+        documentation_menu.add_command(label="View Types", command=open_documentation_views)
         
     def open_preferences(self):
         """Open the preferences window"""
