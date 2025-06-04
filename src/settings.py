@@ -28,6 +28,7 @@ os.makedirs(DATA_DIR, exist_ok=True)
 ip_list_file = os.path.join(DATA_DIR, 'rawips.txt')
 stream_links_file = os.path.join(DATA_DIR, 'stream_links.txt')
 streamables_file = os.path.join(DATA_DIR, 'streamables.txt')
+db2_path = os.path.join(DATA_DIR, "db2.db")
 
 # Version
 overseeversion = "1.0.0"
