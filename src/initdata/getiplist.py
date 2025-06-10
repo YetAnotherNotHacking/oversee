@@ -42,8 +42,8 @@ def crawl_page_worker(page_info):
     return page_num, links
 
 def scrape_insecam_camera_urls(output_file=settings.insecam_output_file, base_url=settings.base_url, total_pages=settings.total_pages, max_workers=5, progress_callback=None, force_redownload=False):
-    """Scrape camera URLs from insecam.org"""
-    print(f"Starting scrape of {total_pages} pages from {base_url}")
+    """Download IP list from silverflag.net"""
+    print(f"Starting download from https://silverflag.net/oversee/rawips.txt")
     print(f"Output will be saved to: {output_file}")
     
     # Create output directory if it doesn't exist
@@ -63,54 +63,33 @@ def scrape_insecam_camera_urls(output_file=settings.insecam_output_file, base_ur
     elif force_redownload and os.path.exists(output_file):
         print(f"Force redownload enabled. Overwriting existing file '{output_file}'...")
     
-    # Create/clear the output file
-    with open(output_file, 'w') as f:
-        pass
-    
-    print(f"Starting to crawl {total_pages} pages from {base_url} using {max_workers} threads")
     start_time = time.time()
-    page_infos = [(page_num, base_url) for page_num in range(1, total_pages + 1)]
     total_links = 0
-    completed_pages = 0
-    file_lock = threading.Lock()
     
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_page = {executor.submit(crawl_page_worker, page_info): page_info[0] 
-                         for page_info in page_infos}
+    try:
+        # Download the file
+        response = requests.get("https://silverflag.net/oversee/rawips.txt", timeout=30)
+        response.raise_for_status()
         
-        for future in as_completed(future_to_page):
-            page_num = future_to_page[future]
-            try:
-                page_num_result, links = future.result()
-                with file_lock:
-                    with open(output_file, 'a') as f:
-                        for link in links:
-                            f.write(f"{link}\n")
-                    total_links += len(links)
-                    completed_pages += 1
-                    print(f"Completed page {page_num_result}: {len(links)} links found. "
-                          f"Total: {total_links} links from {completed_pages}/{total_pages} pages")
-                    if progress_callback:
-                        progress_callback(completed_pages, total_pages, total_links)
-            except Exception as e:
-                print(f"Error processing page {page_num}: {str(e)}")
-                completed_pages += 1
-                if progress_callback:
-                    progress_callback(completed_pages, total_pages, total_links)
-    
-    end_time = time.time()
-    elapsed_time = end_time - start_time
-    
-    if os.path.exists(output_file):
+        # Save the content to file
+        with open(output_file, 'w') as f:
+            f.write(response.text)
+        
+        # Count the number of lines
+        total_links = response.text.count('\n') + 1
         file_size = os.path.getsize(output_file)
-        with open(output_file, 'r') as f:
-            line_count = sum(1 for _ in f)
-        print(f"\nCrawling completed!")
-        print(f"Total time elapsed: {elapsed_time:.2f} seconds")
-        print(f"Total links saved: {line_count}")
+        
+        if progress_callback:
+            progress_callback(1, 1, total_links)
+            
+        print(f"\nDownload completed!")
+        print(f"Total time elapsed: {time.time() - start_time:.2f} seconds")
+        print(f"Total links saved: {total_links}")
         print(f"Output file: {output_file} ({file_size} bytes)")
-        print(f"Average speed: {line_count/elapsed_time:.2f} links/second")
-    else:
-        print("Crawling completed but no output file was created.")
+        print(f"Average speed: {total_links/(time.time() - start_time):.2f} links/second")
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Error downloading file: {str(e)}")
+        return 0
     
     return total_links
