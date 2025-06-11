@@ -33,6 +33,13 @@ jobs:
         run: |
           brew install gettext
           brew link gettext --force
+          # Set library path for gettext
+          echo "GETTEXT_PATH=$(brew --prefix gettext)" >> $GITHUB_ENV
+          echo "DYLD_LIBRARY_PATH=$(brew --prefix gettext)/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+          echo "LIBRARY_PATH=$(brew --prefix gettext)/lib:$LIBRARY_PATH" >> $GITHUB_ENV
+          # Create symlink in the expected location
+          sudo mkdir -p /usr/local/opt/gettext/lib
+          sudo ln -sf $(brew --prefix gettext)/lib/libintl.8.dylib /usr/local/opt/gettext/lib/libintl.8.dylib
 
       - name: Set up Python
         uses: actions/setup-python@v4
