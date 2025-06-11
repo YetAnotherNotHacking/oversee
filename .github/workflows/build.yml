@@ -94,6 +94,24 @@ jobs:
             echo "PYTHON_LDFLAGS=-L/usr/local/opt/openssl/lib" >> $GITHUB_ENV
           '
 
+      # Install Tcl/Tk for macOS x64
+      - name: Install Tcl/Tk (macOS x64 only)
+        if: runner.os == 'macOS' && matrix.arch == 'x64'
+        run: |
+          arch -x86_64 /bin/bash -c '
+            export PATH="/usr/local/bin:$PATH"
+            brew install tcl-tk@8
+            brew link --force tcl-tk@8
+            echo "TCL_TK_ROOT=/usr/local/opt/tcl-tk@8" >> $GITHUB_ENV
+            echo "TCL_TK_LIBRARY=/usr/local/opt/tcl-tk@8/lib" >> $GITHUB_ENV
+            echo "TCL_TK_INCLUDE=/usr/local/opt/tcl-tk@8/include" >> $GITHUB_ENV
+            # Add Tcl/Tk to library path
+            echo "DYLD_LIBRARY_PATH=/usr/local/opt/tcl-tk@8/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+            echo "LIBRARY_PATH=/usr/local/opt/tcl-tk@8/lib:$LIBRARY_PATH" >> $GITHUB_ENV
+            # Add Tcl/Tk to Python configure options
+            echo "PYTHON_CONFIGURE_OPTS=--with-openssl=/usr/local/opt/openssl --with-tcltk-includes=-I/usr/local/opt/tcl-tk@8/include --with-tcltk-libs=-L/usr/local/opt/tcl-tk@8/lib -ltk8.6 -ltcl8.6" >> $GITHUB_ENV
+          '
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
