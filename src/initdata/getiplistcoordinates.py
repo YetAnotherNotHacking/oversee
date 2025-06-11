@@ -125,73 +125,18 @@ def process_single_ip(ip, db_path, progress_callback=None):
         # Extract base IP without endpoint or port
         base_ip = normalize_ip(ip)
         
-        # Add a delay to avoid rate limiting
-        time.sleep(0.5)  # 500ms delay between requests
-        
-        # First try to get from cache
+        # Get from database
         cached_info = get_cached_ip_info(base_ip, db_path)
         if cached_info:
             return cached_info
             
-        # Try ipinfo.io first
-        try:
-            response = requests.get(f'https://ipinfo.io/{base_ip}/json', 
-                                  headers={'User-Agent': 'Mozilla/5.0'})
-            
-            if response.status_code == 429:
-                # If we hit rate limit, try ip.guide as fallback
-                print(f"Rate limit hit with ipinfo.io, trying ip.guide for {base_ip}")
-                response = requests.get(f'https://ip.guide/{base_ip}',
-                                     headers={'User-Agent': 'Mozilla/5.0'})
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    info = {
-                        'ip': base_ip,
-                        'lat': float(data.get('latitude', 0)),
-                        'lon': float(data.get('longitude', 0)),
-                        'city': data.get('city', ''),
-                        'country': data.get('country', '')
-                    }
-                    save_ip_info(info, db_path)
-                    return info
-            elif response.status_code == 200:
-                data = response.json()
-                if 'loc' in data:
-                    lat, lon = map(float, data['loc'].split(','))
-                    info = {
-                        'ip': base_ip,
-                        'lat': lat,
-                        'lon': lon,
-                        'city': data.get('city', ''),
-                        'country': data.get('country', '')
-                    }
-                    save_ip_info(info, db_path)
-                    return info
-        except Exception as e:
-            print(f"Error with ipinfo.io for {base_ip}: {e}")
-            # If ipinfo.io fails, try ip.guide
-            try:
-                response = requests.get(f'https://ip.guide/{base_ip}',
-                                     headers={'User-Agent': 'Mozilla/5.0'})
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    info = {
-                        'ip': base_ip,
-                        'lat': float(data.get('latitude', 0)),
-                        'lon': float(data.get('longitude', 0)),
-                        'city': data.get('city', ''),
-                        'country': data.get('country', '')
-                    }
-                    save_ip_info(info, db_path)
-                    return info
-            except Exception as e2:
-                print(f"Error with ip.guide for {base_ip}: {e2}")
+        # If not in database, return None
+        print(f"IP {base_ip} not found in database")
+        return None
                 
     except Exception as e:
         print(f"Error processing IP {ip}: {e}")
-    return None
+        return None
 
 def process_ip_list(progress_callback=None):
     """Process all IPs in the list file and store their coordinates"""
