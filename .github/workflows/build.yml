@@ -10,7 +10,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-20.04, ubuntu-22.04, ubuntu-24.04, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -190,17 +190,17 @@ jobs:
           # Create the AppImage using whichever appimagetool is available
           if command -v appimagetool >/dev/null 2>&1; then
             echo "Using appimagetool from PATH"
-            appimagetool "$APPDIR" "dist/${APP_NAME}.AppImage"
+            appimagetool "$APPDIR" "dist/${APP_NAME}-${RUNNER_OS}.AppImage"
           elif [ -f "./appimagetool" ]; then
             echo "Using local appimagetool"
-            ./appimagetool "$APPDIR" "dist/${APP_NAME}.AppImage"
+            ./appimagetool "$APPDIR" "dist/${APP_NAME}-${RUNNER_OS}.AppImage"
           elif [ -f "squashfs-root/AppRun" ]; then
             echo "Using extracted appimagetool"
-            squashfs-root/AppRun "$APPDIR" "dist/${APP_NAME}.AppImage"
+            squashfs-root/AppRun "$APPDIR" "dist/${APP_NAME}-${RUNNER_OS}.AppImage"
           else
             echo "No appimagetool found, creating tar.gz instead"
             cd dist
-            tar -czf "${APP_NAME}-linux.tar.gz" "${APP_NAME}.AppDir"
+            tar -czf "${APP_NAME}-${RUNNER_OS}.tar.gz" "${APP_NAME}.AppDir"
             cd ..
           fi
 
@@ -484,7 +484,7 @@ jobs:
           path: |
             dist/SilverFlagOVERSEE.dmg
             dist/SilverFlagOVERSEE-Installer.exe
-            dist/SilverFlagOVERSEE.AppImage
-            dist/SilverFlagOVERSEE-linux.tar.gz
+            dist/SilverFlagOVERSEE-*.AppImage
+            dist/SilverFlagOVERSEE-*.tar.gz
             dist/SilverFlagOVERSEE
             dist/SilverFlagOVERSEE.app
