@@ -75,6 +75,21 @@ jobs:
             sudo chmod 644 /usr/local/opt/gettext/lib/libintl.8.dylib
           fi
 
+      # Install OpenSSL for macOS x64
+      - name: Install OpenSSL (macOS x64 only)
+        if: runner.os == 'macOS' && matrix.arch == 'x64'
+        run: |
+          arch -x86_64 /bin/bash -c '
+            export PATH="/usr/local/bin:$PATH"
+            brew install openssl@1.1
+            brew link --force openssl@1.1
+            echo "OPENSSL_ROOT_DIR=/usr/local/opt/openssl@1.1" >> $GITHUB_ENV
+            echo "OPENSSL_LIBRARIES=/usr/local/opt/openssl@1.1/lib" >> $GITHUB_ENV
+            echo "OPENSSL_INCLUDE_DIR=/usr/local/opt/openssl@1.1/include" >> $GITHUB_ENV
+            echo "LDFLAGS=-L/usr/local/opt/openssl@1.1/lib" >> $GITHUB_ENV
+            echo "CPPFLAGS=-I/usr/local/opt/openssl@1.1/include" >> $GITHUB_ENV
+          '
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
