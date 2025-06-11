@@ -384,8 +384,9 @@ class MainGUI:
             control_frame = ttk.Frame(map_frame)
             control_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
             
+            # Style selector
             style_label = ttk.Label(control_frame, text="Map Style:")
-            style_label.grid(row=0, column=0, padx=5, pady=5)
+            style_label.pack(fill="x", padx=5, pady=5)
             
             style_var = tk.StringVar(value="OpenStreetMap")
             style_combo = ttk.Combobox(control_frame, textvariable=style_var, state="readonly")
@@ -399,7 +400,7 @@ class MainGUI:
                 "No labels",
                 "Swiss topo"
             )
-            style_combo.grid(row=0, column=1, padx=5, pady=5)
+            style_combo.pack(fill="x", padx=5, pady=5)
             
             def change_map_style(event=None):
                 style = style_var.get()
@@ -424,12 +425,25 @@ class MainGUI:
             
             # Add marker count control
             count_frame = ttk.Frame(control_frame)
-            count_frame.grid(row=1, column=0, columnspan=2, padx=5, pady=5)
+            count_frame.pack(fill="x", padx=5, pady=5)
             
-            ttk.Label(count_frame, text="Markers to load:").pack(side="left", padx=5)
+            ttk.Label(count_frame, text="Markers to load:").pack(fill="x", padx=5)
             count_var = tk.StringVar(value="100")
             count_entry = ttk.Entry(count_frame, textvariable=count_var, width=10)
-            count_entry.pack(side="left", padx=5)
+            count_entry.pack(fill="x", padx=5)
+            
+            # Add warning label
+            warning_label = ttk.Label(count_frame, text="(Recommended: ≤200 markers)", foreground='#ff6b6b')
+            warning_label.pack(fill="x", padx=5)
+            
+            def start_loading():
+                """Start loading markers in a separate thread"""
+                # Start loading thread
+                threading.Thread(target=load_markers_thread, daemon=True).start()
+            
+            # Add load markers button
+            load_button = ttk.Button(control_frame, text="Load Markers", command=start_loading)
+            load_button.pack(fill="x", padx=5, pady=5)
             
             # Add progress bar
             progress_frame = ttk.Frame(map_frame)
@@ -446,21 +460,46 @@ class MainGUI:
             def load_markers_thread():
                 """Load markers in a separate thread"""
                 try:
+                    print("Starting marker loading process...")
                     # Clear existing markers
                     map_widget.delete_all_marker()
                     
                     # Get number of markers to load
                     try:
                         num_markers = int(count_var.get())
+                        if num_markers > 200:
+                            messagebox.showwarning("Large Number of Markers", 
+                                "Loading more than 200 markers may cause performance issues.\nConsider loading fewer markers.")
                     except ValueError:
                         num_markers = 100
                     
+                    print(f"Attempting to load {num_markers} markers...")
+                    
                     # Connect to database
-                    conn = sqlite3.connect(settings.ip_info_db)
-                    cursor = conn.cursor()
-                    cursor.execute('SELECT ip, lat, lon, city, country FROM ip_info LIMIT ?', (num_markers,))
-                    results = cursor.fetchall()
-                    conn.close()
+                    try:
+                        conn = sqlite3.connect(settings.ip_info_db)
+                        cursor = conn.cursor()
+                        cursor.execute('SELECT ip, lat, lon, city, country FROM ip_info LIMIT ?', (num_markers,))
+                        results = cursor.fetchall()
+                        conn.close()
+                        
+                        if not results:
+                            print("No results found in database. Checking if database exists...")
+                            if not os.path.exists(settings.ip_info_db):
+                                print(f"Database file not found at: {settings.ip_info_db}")
+                                messagebox.showerror("Error", "IP database not found. Please run initialization first.")
+                                return
+                            else:
+                                print("Database exists but no results found.")
+                                messagebox.showinfo("No Data", "No IP data found in database. Please run initialization first.")
+                                return
+                        
+                        print(f"Found {len(results)} results in database")
+                        
+                    except sqlite3.Error as e:
+                        print(f"Database error: {e}")
+                        messagebox.showerror("Database Error", f"Error accessing IP database: {e}")
+                        return
                     
                     total_ips = len(results)
                     processed = 0
@@ -469,70 +508,71 @@ class MainGUI:
                     self.progress_var.set(0)
                     self.counter_label.config(text=f"0/{total_ips}")
                     
-                    for ip, lat, lon, city, country in results:
-                        # Create marker with IP info
-                        marker_text = f"{ip}\n{city}, {country}"
-                        
-                        # Add marker in main thread
-                        def add_marker(ip=ip, lat=lat, lon=lon, text=marker_text):
-                            # Create click handler
-                            def click_marker_event(marker):
-                                print("marker clicked:", marker.text)
-                                # Extract base IP from marker text
-                                base_ip = marker.text.split('\n')[0]  # Get first line which is the IP
-                                
-                                # Switch to list view and select the IP
-                                self.notebook.select(2)  # Switch to list view tab
-                                
-                                # Find and select the item in the tree
-                                for item in self.tree.get_children():
-                                    item_ip = self.tree.item(item)['values'][0]
-                                    # Compare base IPs (without endpoints)
-                                    item_base_ip = item_ip.split('/')[0] if '/' in item_ip else item_ip
-                                    item_base_ip = item_base_ip.split(':')[0] if ':' in item_base_ip else item_base_ip
-                                    
-                                    if item_base_ip == base_ip:
-                                        self.tree.selection_set(item)
-                                        self.tree.see(item)
-                                        # Trigger the selection event to show camera preview
-                                        self.on_item_select(None)
-                                        break
-                            
-                            # Create marker with click handler
-                            marker = map_widget.set_marker(lat, lon, text=text, command=click_marker_event)
-                            
-                            # Add hover effect
-                            if hasattr(marker, 'canvas_item'):
-                                map_widget.canvas.tag_bind(marker.canvas_item, '<Enter>', 
-                                    lambda e: map_widget.canvas.itemconfig(marker.canvas_item, fill='red'))
-                                map_widget.canvas.tag_bind(marker.canvas_item, '<Leave>', 
-                                    lambda e: map_widget.canvas.itemconfig(marker.canvas_item, fill='blue'))
-                        
-                        # Schedule marker addition in main thread
-                        self.root.after(0, lambda: add_marker())
-                        
-                        # Update progress
-                        processed += 1
-                        progress = (processed / total_ips) * 100
-                        self.progress_var.set(progress)
-                        self.counter_label.config(text=f"{processed}/{total_ips}")
-                        
-                        # Small delay to keep GUI responsive
-                        time.sleep(0.01)
+                    # Batch markers for faster loading
+                    batch_size = 50
+                    marker_batches = [results[i:i + batch_size] for i in range(0, len(results), batch_size)]
                     
-                    print(f"Loaded {processed} markers from database")
+                    print(f"Processing {len(marker_batches)} batches of markers...")
+                    
+                    for batch in marker_batches:
+                        if not self.is_shutting_down:
+                            # Create markers for this batch
+                            markers_to_add = []
+                            for ip, lat, lon, city, country in batch:
+                                marker_text = f"{ip}\n{city}, {country}"
+                                
+                                # Create click handler
+                                def create_click_handler(ip=ip):
+                                    def click_marker_event(marker):
+                                        # Extract base IP from marker text
+                                        base_ip = marker.text.split('\n')[0]
+                                        
+                                        # Switch to list view and select the IP
+                                        self.notebook.select(2)
+                                        
+                                        # Find and select the item in the tree
+                                        for item in self.tree.get_children():
+                                            item_ip = self.tree.item(item)['values'][0]
+                                            item_base_ip = item_ip.split('/')[0] if '/' in item_ip else item_ip
+                                            item_base_ip = item_base_ip.split(':')[0] if ':' in item_base_ip else item_base_ip
+                                            
+                                            if item_base_ip == base_ip:
+                                                self.tree.selection_set(item)
+                                                self.tree.see(item)
+                                                self.on_item_select(None)
+                                                break
+                                    return click_marker_event
+                                
+                                markers_to_add.append((lat, lon, marker_text, create_click_handler(ip)))
+                            
+                            # Add batch of markers in main thread
+                            def add_marker_batch():
+                                for lat, lon, text, click_handler in markers_to_add:
+                                    marker = map_widget.set_marker(lat, lon, text=text, command=click_handler)
+                                    if hasattr(marker, 'canvas_item'):
+                                        map_widget.canvas.tag_bind(marker.canvas_item, '<Enter>', 
+                                            lambda e, m=marker: map_widget.canvas.itemconfig(m.canvas_item, fill='red'))
+                                        map_widget.canvas.tag_bind(marker.canvas_item, '<Leave>', 
+                                            lambda e, m=marker: map_widget.canvas.itemconfig(m.canvas_item, fill='blue'))
+                            
+                            self.root.after(0, add_marker_batch)
+                            
+                            # Update progress
+                            processed += len(batch)
+                            progress = (processed / total_ips) * 100
+                            self.progress_var.set(progress)
+                            self.counter_label.config(text=f"{processed}/{total_ips}")
+                            
+                            # Small delay between batches to keep GUI responsive
+                            time.sleep(0.05)
+                    
+                    print(f"Successfully loaded {processed} markers")
                     
                 except Exception as e:
                     print(f"Error loading markers: {e}")
-            
-            def start_loading():
-                """Start loading markers in a separate thread"""
-                # Start loading thread
-                threading.Thread(target=load_markers_thread, daemon=True).start()
-            
-            # Add load markers button
-            load_button = ttk.Button(control_frame, text="Load Markers", command=start_loading)
-            load_button.grid(row=2, column=0, columnspan=2, padx=5, pady=5)
+                    import traceback
+                    traceback.print_exc()
+                    messagebox.showerror("Error", f"Failed to load markers: {str(e)}")
             
             # Store the map widget for later use
             self.map_widget = map_widget
@@ -1036,9 +1076,7 @@ class MainGUI:
         ip = camera_info['ip']
         
         # Extract base IP without endpoint or port
-        base
-        
-        _ip = ip.split('/')[0] if '/' in ip else ip
+        base_ip = ip.split('/')[0] if '/' in ip else ip
         base_ip = base_ip.split(':')[0] if ':' in base_ip else base_ip
         
         # Create new window
