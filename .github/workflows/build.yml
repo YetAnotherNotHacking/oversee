@@ -105,8 +105,33 @@ jobs:
               pyinstaller --onefile --windowed src/main.py --name SilverFlagOVERSEE --distpath dist
             fi
           else
-            # Linux
-            pyinstaller --onefile --windowed src/main.py --name SilverFlagOVERSEE --distpath dist
+            # Linux with all dependencies
+            pyinstaller --onefile --windowed \
+              --hidden-import=beautifulsoup4 \
+              --hidden-import=cv2 \
+              --hidden-import=numpy \
+              --hidden-import=requests \
+              --hidden-import=psutil \
+              --hidden-import=pyautogui \
+              --hidden-import=pynput \
+              --hidden-import=folium \
+              --hidden-import=tkintermapview \
+              --hidden-import=appdirs \
+              --hidden-import=OpenSSL \
+              --hidden-import=playwright \
+              --hidden-import=PIL \
+              --hidden-import=ttkthemes \
+              --hidden-import=sqlite3 \
+              --hidden-import=tkinter \
+              --hidden-import=tkinter.ttk \
+              --hidden-import=tkinter.messagebox \
+              --hidden-import=tkinter.filedialog \
+              --collect-all playwright \
+              --collect-all beautifulsoup4 \
+              --collect-all cv2 \
+              --collect-all tkintermapview \
+              --collect-all ttkthemes \
+              src/main.py --name SilverFlagOVERSEE --distpath dist
           fi
         shell: bash
 
