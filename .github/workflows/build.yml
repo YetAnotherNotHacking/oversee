@@ -278,12 +278,31 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           APP_NAME=SilverFlagOVERSEE
-          APP_PATH=dist/${APP_NAME}.app
+          APP_PATH=dist/${APP_NAME}-${{ matrix.arch }}.app
           DMG_NAME=${APP_NAME}.dmg
           VOL_NAME="Install ${APP_NAME}"
           DMG_TEMP=tmp.dmg
           STAGING_DIR=dist/dmg-staging
           BACKGROUND_PATH=$GITHUB_WORKSPACE/assets/dmg-background.png
+
+          # Wait for app bundle to be ready
+          echo "Waiting for app bundle to be ready..."
+          for i in {1..30}; do
+            if [ -d "$APP_PATH" ]; then
+              echo "App bundle found at $APP_PATH"
+              # Additional check to ensure it's fully written
+              if [ -f "$APP_PATH/Contents/MacOS/${APP_NAME}-${{ matrix.arch }}" ]; then
+                echo "App bundle is ready"
+                break
+              fi
+            fi
+            if [ $i -eq 30 ]; then
+              echo "Error: App bundle not found after 30 seconds"
+              exit 1
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 1
+          done
 
           # Create staging directory
           mkdir -p "$STAGING_DIR/.background"
