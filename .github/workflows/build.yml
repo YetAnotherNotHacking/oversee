@@ -32,17 +32,24 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           if [[ "${{ matrix.arch }}" == "x64" ]]; then
-            # For x64, we need to use Rosetta 2 to install x86_64 version
+            # For x64, we need to use x86_64 Homebrew
+            echo "Installing x86_64 Homebrew..."
             arch -x86_64 /bin/bash -c '
+              # Install x86_64 Homebrew if not already installed
+              if [ ! -d "/usr/local/Homebrew" ]; then
+                /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+              fi
+              # Use x86_64 Homebrew
+              export PATH="/usr/local/bin:$PATH"
               brew install gettext
               brew link gettext --force
               # Set library path for gettext
-              echo "GETTEXT_PATH=$(brew --prefix gettext)" >> $GITHUB_ENV
-              echo "DYLD_LIBRARY_PATH=$(brew --prefix gettext)/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
-              echo "LIBRARY_PATH=$(brew --prefix gettext)/lib:$LIBRARY_PATH" >> $GITHUB_ENV
+              echo "GETTEXT_PATH=/usr/local/opt/gettext" >> $GITHUB_ENV
+              echo "DYLD_LIBRARY_PATH=/usr/local/opt/gettext/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+              echo "LIBRARY_PATH=/usr/local/opt/gettext/lib:$LIBRARY_PATH" >> $GITHUB_ENV
               # Create symlink in the expected location
               sudo mkdir -p /usr/local/opt/gettext/lib
-              sudo ln -sf $(brew --prefix gettext)/lib/libintl.8.dylib /usr/local/opt/gettext/lib/libintl.8.dylib
+              sudo ln -sf /usr/local/opt/gettext/lib/libintl.8.dylib /usr/local/opt/gettext/lib/libintl.8.dylib
             '
           else
             # For arm64, use native installation
