@@ -81,13 +81,17 @@ jobs:
         run: |
           arch -x86_64 /bin/bash -c '
             export PATH="/usr/local/bin:$PATH"
-            brew install openssl@1.1
-            brew link --force openssl@1.1
-            echo "OPENSSL_ROOT_DIR=/usr/local/opt/openssl@1.1" >> $GITHUB_ENV
-            echo "OPENSSL_LIBRARIES=/usr/local/opt/openssl@1.1/lib" >> $GITHUB_ENV
-            echo "OPENSSL_INCLUDE_DIR=/usr/local/opt/openssl@1.1/include" >> $GITHUB_ENV
-            echo "LDFLAGS=-L/usr/local/opt/openssl@1.1/lib" >> $GITHUB_ENV
-            echo "CPPFLAGS=-I/usr/local/opt/openssl@1.1/include" >> $GITHUB_ENV
+            brew install openssl
+            brew link --force openssl
+            echo "OPENSSL_ROOT_DIR=/usr/local/opt/openssl" >> $GITHUB_ENV
+            echo "OPENSSL_LIBRARIES=/usr/local/opt/openssl/lib" >> $GITHUB_ENV
+            echo "OPENSSL_INCLUDE_DIR=/usr/local/opt/openssl/include" >> $GITHUB_ENV
+            echo "LDFLAGS=-L/usr/local/opt/openssl/lib" >> $GITHUB_ENV
+            echo "CPPFLAGS=-I/usr/local/opt/openssl/include" >> $GITHUB_ENV
+            # Also set these for Python
+            echo "PYTHON_CONFIGURE_OPTS=--with-openssl=/usr/local/opt/openssl" >> $GITHUB_ENV
+            echo "PYTHON_CFLAGS=-I/usr/local/opt/openssl/include" >> $GITHUB_ENV
+            echo "PYTHON_LDFLAGS=-L/usr/local/opt/openssl/lib" >> $GITHUB_ENV
           '
 
       - name: Set up Python
