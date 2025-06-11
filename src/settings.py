@@ -59,7 +59,7 @@ base_url = "http://www.insecam.org/en/byrating/"  # Endpoint to scrape by
 total_pages = 448  # Total number of pages on insecam, may require manual updating (I might implement autoupdating for this later)
 
 # Remote Database Settings
-remote_db_url = "http://silverflag.net/oversee/backend/db.php"  # Update with your actual domain
+remote_db_url = "http://silverflag.net/oversee/backend/db.php"
 remote_db_api_key = "publicaccesstokenzareawesome"  # Update with your actual API key
 
 # Ensure all required directories exist
