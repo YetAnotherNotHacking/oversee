@@ -523,9 +523,8 @@ jobs:
         with:
           name: SilverFlagOVERSEE-${{ matrix.os }}-${{ matrix.arch }}
           path: |
-            dist/SilverFlagOVERSEE.dmg
-            dist/SilverFlagOVERSEE-Installer.exe
-            dist/SilverFlagOVERSEE-*.AppImage
-            dist/SilverFlagOVERSEE-*.tar.gz
-            dist/SilverFlagOVERSEE*
-            dist/SilverFlagOVERSEE.app
+            ${{ runner.os == 'macOS' && format('dist/SilverFlagOVERSEE-{0}.app', matrix.arch) || '' }}
+            ${{ runner.os == 'Windows' && 'dist/SilverFlagOVERSEE-Installer.exe' || '' }}
+            ${{ runner.os == 'Linux' && 'dist/SilverFlagOVERSEE-*.AppImage' || '' }}
+            ${{ runner.os == 'Linux' && 'dist/SilverFlagOVERSEE-*.tar.gz' || '' }}
+            ${{ runner.os == 'Windows' && 'dist/SilverFlagOVERSEE.exe' || '' }}
