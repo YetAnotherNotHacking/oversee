@@ -3,6 +3,7 @@ import platform
 import appdirs
 import shutil
 from pathlib import Path
+import sys
 
 def get_app_data_dir():
     """
@@ -20,6 +21,57 @@ def get_app_data_dir():
     # Create the directory if it doesn't exist
     os.makedirs(base_dir, exist_ok=True)
     return base_dir
+
+def get_bundled_data_dir():
+    """
+    Get the path to the bundled data directory within the application.
+    """
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        # Running as a PyInstaller bundle
+        return os.path.join(sys._MEIPASS, 'src', 'data')
+    else:
+        # Running as a script, get the data directory relative to this file
+        return os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
+
+def copy_bundled_data_files():
+    """
+    Copy bundled data files to the user's writable data directory if they don't exist.
+    This should be called during application initialization.
+    """
+    bundled_data_dir = get_bundled_data_dir()
+    user_data_dir = get_app_data_dir()
+    
+    # List of files that should be copied from bundled data to user data
+    files_to_copy = [
+        'IP2LOCATION-LITE-DB1.CSV.ZIP',
+        'IP2LOCATION-LITE-DB1.CSV',
+        'LICENSE-CC-BY-SA-4.0.TXT',
+        'README_LITE.TXT',
+        'rawips.txt',
+        'stream_links.txt',
+        'streamables.txt'
+    ]
+    
+    copied_files = []
+    
+    if os.path.exists(bundled_data_dir):
+        for filename in files_to_copy:
+            src_path = os.path.join(bundled_data_dir, filename)
+            dst_path = os.path.join(user_data_dir, filename)
+            
+            # Only copy if source exists and destination doesn't exist
+            if os.path.exists(src_path) and not os.path.exists(dst_path):
+                try:
+                    shutil.copy2(src_path, dst_path)
+                    copied_files.append(filename)
+                    print(f"Copied bundled file: {filename}")
+                except Exception as e:
+                    print(f"Error copying {filename}: {e}")
+    
+    if copied_files:
+        print(f"Copied {len(copied_files)} bundled data files to user directory")
+    
+    return copied_files
 
 def get_data_subdir(subdir):
     """

@@ -1,4 +1,5 @@
 import cv2
+
 import numpy as np
 import math
 import threading
@@ -6,6 +7,7 @@ import time
 import queue
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from utility.iplist import get_ip_range
+from utility.paths import get_database_path
 import settings
 from datetime import datetime
 import sqlite3
@@ -35,7 +37,7 @@ class CameraManager:
         self.executor = None  # Initialize to None
         self.last_update = 0
         self.update_interval = 2.0  # Update every 2 seconds
-        self.db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'cameras.db')
+        self.db_path = get_database_path('cameras.db')
         self.camera_metadata = {}
         self.camera_urls = []
         self.url_lock = threading.Lock()

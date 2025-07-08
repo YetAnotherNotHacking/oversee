@@ -3,6 +3,7 @@ from tkinter import ttk
 from tkintermapview import TkinterMapView
 import sqlite3
 import os
+from utility.paths import get_database_path
 
 class FocusedMapWindow:
     def __init__(self, parent, ip):
@@ -90,7 +91,7 @@ class FocusedMapWindow:
             base_ip = base_ip.split(':')[0] if ':' in base_ip else base_ip
             
             # Get location from database
-            db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'ip_info.db')
+            db_path = get_database_path('ip_info.db')
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
             cursor.execute('SELECT lat, lon, city, country FROM ip_info WHERE ip = ?', (base_ip,))

@@ -163,7 +163,7 @@ def init():
     """Initialize the application"""
     try:
         # Create data directory
-        os.makedirs(settings.data_dir, exist_ok=True)
+        os.makedirs(settings.DATA_DIR, exist_ok=True)
         
         # Initialize database
         init_database()

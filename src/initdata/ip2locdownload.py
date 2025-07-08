@@ -4,11 +4,15 @@ import os
 import sys
 from pathlib import Path
 
+# Add parent directory to path to import settings
+sys.path.append(str(Path(__file__).parent.parent))
+import settings
+
 def download_database(DB_URL, DB_ZIP, DB_CSV, progress_callback=None):
     """Download the IP2LOC database"""
     try:
-        # Create data directory if it doesn't exist
-        data_dir = Path(__file__).parent.parent / 'data'
+        # Use the proper data directory from settings
+        data_dir = Path(settings.DATA_DIR)
         data_dir.mkdir(exist_ok=True)
         
         db_zip_path = data_dir / DB_ZIP
@@ -61,7 +65,7 @@ def download_database(DB_URL, DB_ZIP, DB_CSV, progress_callback=None):
 
 def extract_database(DB_CSV, DB_ZIP):
     """Legacy function for backward compatibility"""
-    data_dir = Path(__file__).parent.parent / 'data'
+    data_dir = Path(settings.DATA_DIR)
     db_zip_path = data_dir / DB_ZIP
     db_csv_path = data_dir / DB_CSV
     

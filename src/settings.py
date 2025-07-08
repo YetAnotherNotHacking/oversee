@@ -8,21 +8,17 @@ from utility.paths import (
     get_log_file_path,
     get_cache_file_path,
     get_config_file_path,
+    get_app_data_dir,
     ensure_data_directories,
-    verify_data_access
+    verify_data_access,
+    copy_bundled_data_files
 )
 
 # Get the appropriate data directory based on platform
-if sys.platform == 'darwin':  # macOS
-    # Use /Users/Shared/OVERSEE for system-wide shared data
-    DATA_DIR = '/Users/Shared/OVERSEE'
-else:
-    # Get the base directory (src folder)
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    DATA_DIR = os.path.join(BASE_DIR, 'data')
+DATA_DIR = get_app_data_dir()
 
-# Create data directory if it doesn't exist
-os.makedirs(DATA_DIR, exist_ok=True)
+# Copy bundled data files to user directory on first run
+copy_bundled_data_files()
 
 # File paths
 ip_list_file = os.path.join(DATA_DIR, 'rawips.txt')

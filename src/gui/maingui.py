@@ -11,6 +11,7 @@ import os
 from gui.rendermatrix import create_matrix_view as render_matrix
 from utility.ip2loc import get_geolocation
 from utility.iplist import get_ip_range
+from utility.paths import get_database_path, get_app_data_dir
 import os
 import gui
 import settings
@@ -29,6 +30,8 @@ import json
 import webbrowser
 import io
 import socket
+import urllib.request
+from io import BytesIO
 
 ip_list_file = settings.ip_list_file
 db2_path = settings.db2_path
@@ -1109,7 +1112,7 @@ class MainGUI:
         
         # Get IP info from database
         try:
-            db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'ip_info.db')
+            db_path = get_database_path('ip_info.db')
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM ip_info WHERE ip = ?', (base_ip,))
@@ -1209,7 +1212,7 @@ class MainGUI:
     def reinit_all(self):
         import shutil
         import sys
-        data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
+        data_dir = get_app_data_dir()
         answer = messagebox.askyesno("Reinitialize All Data", "This will delete all data and redownload everything. Are you sure?")
         if answer:
             try:

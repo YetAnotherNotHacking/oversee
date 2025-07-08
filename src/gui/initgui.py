@@ -291,7 +291,7 @@ def init_gui():
     """Initialize the GUI"""
     try:
         # Create data directory if it doesn't exist
-        os.makedirs(settings.data_dir, exist_ok=True)
+        os.makedirs(settings.DATA_DIR, exist_ok=True)
         
         # Initialize database
         init_database()
