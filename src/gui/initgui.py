@@ -266,12 +266,17 @@ class StartUpMenu:
     def _complete_loading(self):
         """Complete the loading process"""
         print("Completing loading process...")
+        # Close the loading window first
+        self.overandout()
+        
+        # Then call the completion callback to start main GUI
         if self.completion_callback:
             try:
+                # Small delay to ensure window is fully closed
+                time.sleep(0.2)
                 self.completion_callback()
             except Exception as e:
                 print(f"Completion callback error: {e}")
-        self.overandout()
     
     def overandout(self):
         """Close the loading window"""

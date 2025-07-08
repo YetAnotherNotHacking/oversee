@@ -304,6 +304,8 @@ def initialization_tasks(startupmenu):
 
 def on_completion():
     print("Initialization complete! Starting main application...")
+    # Small delay to ensure startup menu completion is visible
+    time.sleep(0.5)
     # Launch the main GUI after initialization is complete
     from gui.maingui import runmaingui
     runmaingui()
