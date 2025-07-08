@@ -77,9 +77,10 @@ jobs:
               sips -z 512 512 assets/logo.png --out SilverFlagOVERSEE.iconset/icon_512x512.png
               cp assets/logo.png SilverFlagOVERSEE.iconset/icon_512x512@2x.png
               iconutil -c icns SilverFlagOVERSEE.iconset
+              pyinstaller --windowed --icon=SilverFlagOVERSEE.icns src/main.py --name SilverFlagOVERSEE --distpath dist --add-data "src/data:src/data" --hidden-import settings --paths src --hidden-import gui.maingui --hidden-import gui.rendermatrix --hidden-import gui.initgui --hidden-import utility.paths --hidden-import utility.ip2loc --hidden-import utility.iplist --hidden-import backend.cameradown --hidden-import initdata.headinit --hidden-import initdata.ip2locdownload --hidden-import initdata.getiplist --hidden-import initdata.formatscrapeddata --hidden-import initdata.validateiplist --hidden-import initdata.getiplistcoordinates --hidden-import documentationmd.views --hidden-import documentationmd.movements
+            else
+              pyinstaller --windowed src/main.py --name SilverFlagOVERSEE --distpath dist --add-data "src/data:src/data" --hidden-import settings --paths src --hidden-import gui.maingui --hidden-import gui.rendermatrix --hidden-import gui.initgui --hidden-import utility.paths --hidden-import utility.ip2loc --hidden-import utility.iplist --hidden-import backend.cameradown --hidden-import initdata.headinit --hidden-import initdata.ip2locdownload --hidden-import initdata.getiplist --hidden-import initdata.formatscrapeddata --hidden-import initdata.validateiplist --hidden-import initdata.getiplistcoordinates --hidden-import documentationmd.views --hidden-import documentationmd.movements
             fi
-            # Use the spec file for better dependency management
-            pyinstaller SilverFlagOVERSEE.spec --distpath dist
           elif [[ "$RUNNER_OS" == "Windows" ]]; then
             # Windows with icon
             if [ -f "assets/logo.png" ]; then
