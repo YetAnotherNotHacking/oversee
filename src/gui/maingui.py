@@ -379,13 +379,32 @@ class MainGUI:
         try:
             from tkintermapview import TkinterMapView
             
-            # Create the map widget
+            # Create the map widget with explicit tile server
             map_widget = TkinterMapView(map_frame, width=800, height=600, corner_radius=0)
             map_widget.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
             
+            # Set initial tile server explicitly (fix for white map issue)
+            try:
+                map_widget.set_tile_server("https://a.tile.openstreetmap.org/{z}/{x}/{y}.png")
+            except Exception as e:
+                print(f"Warning: Could not set tile server: {e}")
+                # Try alternative tile server
+                try:
+                    map_widget.set_tile_server("https://tile.openstreetmap.org/{z}/{x}/{y}.png")
+                except Exception as e2:
+                    print(f"Warning: Fallback tile server also failed: {e2}")
+            
             # Set initial position and zoom
-            map_widget.set_position(0, 0)
-            map_widget.set_zoom(2)
+            map_widget.set_position(40.7128, -74.0060)  # New York City as default
+            map_widget.set_zoom(3)
+            
+            # Force map refresh with error handling
+            try:
+                map_widget.update()
+                # Schedule a delayed refresh to ensure tiles load properly
+                self.root.after(1000, lambda: map_widget.update())
+            except Exception as e:
+                print(f"Warning: Map update failed: {e}")
             
             # Add map style selector
             control_frame = ttk.Frame(map_frame)
