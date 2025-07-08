@@ -4,6 +4,9 @@ import threading
 import time
 import os
 import sys
+import sqlite3
+import settings
+from utility.paths import get_database_path
 
 class StartUpMenu:
     def __init__(self):
@@ -286,6 +289,78 @@ class StartUpMenu:
         """Skip the IP2LOC loading process"""
         print("Skipping IP2LOC loading...")
         self._complete_loading()
+
+def init_database():
+    """Initialize SQLite databases for the application"""
+    try:
+        # Initialize cameras database
+        cameras_db_path = get_database_path('cameras.db')
+        os.makedirs(os.path.dirname(cameras_db_path), exist_ok=True)
+        
+        conn = sqlite3.connect(cameras_db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS cameras (
+                ip TEXT PRIMARY KEY,
+                status TEXT,
+                last_check TIMESTAMP,
+                resolution TEXT,
+                stream_type TEXT,
+                endpoint TEXT,
+                location TEXT
+            )
+        ''')
+        conn.commit()
+        conn.close()
+        
+        # Initialize IP info database
+        ip_info_db_path = get_database_path('ip_info.db')
+        os.makedirs(os.path.dirname(ip_info_db_path), exist_ok=True)
+        
+        conn = sqlite3.connect(ip_info_db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ip_info (
+                ip TEXT PRIMARY KEY,
+                lat REAL,
+                lon REAL,
+                city TEXT,
+                country TEXT,
+                last_updated TIMESTAMP
+            )
+        ''')
+        conn.commit()
+        conn.close()
+        
+        # Initialize IoT devices database
+        iot_db_path = get_database_path('iot_devices.db')
+        os.makedirs(os.path.dirname(iot_db_path), exist_ok=True)
+        
+        conn = sqlite3.connect(iot_db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS iot_devices (
+                ip TEXT PRIMARY KEY,
+                device_type TEXT,
+                status TEXT,
+                last_check TIMESTAMP,
+                manufacturer TEXT,
+                model TEXT,
+                firmware_version TEXT,
+                vulnerabilities TEXT
+            )
+        ''')
+        conn.commit()
+        conn.close()
+        
+        print("Databases initialized successfully")
+        
+    except Exception as e:
+        print(f"Error initializing databases: {e}")
+        raise
 
 def init_gui():
     """Initialize the GUI"""
