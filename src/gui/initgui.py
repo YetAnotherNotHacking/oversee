@@ -296,9 +296,7 @@ def init_gui():
         # Initialize database
         init_database()
         
-        # Start GUI
-        from gui.maingui import runmaingui
-        runmaingui()
+        print("GUI initialization complete")
         
     except Exception as e:
         print(f"Error during GUI initialization: {e}")

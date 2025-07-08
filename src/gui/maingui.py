@@ -40,6 +40,10 @@ db2_path = settings.db2_path
 viewtypemarkdown = documentationviews
 movementendpointmarkdown = documentationmovements
 
+# Global variable to track if GUI is already running
+_gui_instance = None
+_gui_lock = threading.Lock()
+
 class MainGUI:
     def __init__(self, root):
         self.root = root
@@ -1684,9 +1688,34 @@ class MainGUI:
 
 
 def runmaingui():
-    root = tk.Tk()
-    app = MainGUI(root)
-    def on_closing():
-        app.cleanup_on_close()
-    root.protocol("WM_DELETE_WINDOW", on_closing)
-    root.mainloop()
+    """Run the main GUI - with singleton protection"""
+    global _gui_instance
+    
+    with _gui_lock:
+        if _gui_instance is not None:
+            print("GUI instance already running, skipping duplicate startup")
+            return
+        
+        print("Starting main GUI...")
+        
+        # Create main window
+        root = tk.Tk()
+        
+        # Create main GUI instance
+        _gui_instance = MainGUI(root)
+        
+        # Set up close protocol
+        def on_closing():
+            _gui_instance.cleanup_on_close()
+            
+        root.protocol("WM_DELETE_WINDOW", on_closing)
+        
+        try:
+            # Start the main loop
+            root.mainloop()
+        except Exception as e:
+            print(f"Error in main GUI loop: {e}")
+        finally:
+            # Clean up global reference
+            _gui_instance = None
+            print("Main GUI finished")

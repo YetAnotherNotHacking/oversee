@@ -26,10 +26,75 @@ try:
     import logging
     import os
     import sys
+    import tempfile
+    import platform
+    import signal
+    import atexit
 except:
     print("You appear to be in a minimal python environment, please come back in a full environment to ensure this script will function correctly.")
 
 logging.basicConfig(level=logging.DEBUG)
+
+# Application singleton check
+_lock_file = None
+
+def acquire_app_lock():
+    """Acquire application-level lock to prevent multiple instances"""
+    global _lock_file
+    try:
+        lock_file_path = os.path.join(tempfile.gettempdir(), 'oversee_app.lock')
+        
+        # Check if lock file exists and contains a running PID
+        if os.path.exists(lock_file_path):
+            try:
+                with open(lock_file_path, 'r') as f:
+                    pid = int(f.read().strip())
+                    # Check if process is still running
+                    if platform.system() == "Windows":
+                        import subprocess
+                        result = subprocess.run(['tasklist', '/FI', f'PID eq {pid}'], 
+                                              capture_output=True, text=True)
+                        if str(pid) in result.stdout:
+                            return False  # Process still running
+                    else:
+                        try:
+                            os.kill(pid, 0)  # Signal 0 just checks if process exists
+                            return False  # Process still running
+                        except OSError:
+                            pass  # Process not running, can proceed
+            except (ValueError, IOError):
+                pass  # Invalid lock file, proceed
+        
+        # Create/update lock file
+        _lock_file = open(lock_file_path, 'w')
+        _lock_file.write(str(os.getpid()))
+        _lock_file.flush()
+        
+        # Register cleanup handlers
+        atexit.register(release_app_lock)
+        if platform.system() != "Windows":
+            signal.signal(signal.SIGTERM, lambda sig, frame: release_app_lock())
+            signal.signal(signal.SIGINT, lambda sig, frame: release_app_lock())
+        
+        return True
+    except (IOError, OSError):
+        if _lock_file:
+            _lock_file.close()
+            _lock_file = None
+        return False
+
+def release_app_lock():
+    """Release application-level lock"""
+    global _lock_file
+    if _lock_file:
+        try:
+            _lock_file.close()
+            lock_file_path = os.path.join(tempfile.gettempdir(), 'oversee_app.lock')
+            if os.path.exists(lock_file_path):
+                os.remove(lock_file_path)
+        except:
+            pass
+        _lock_file = None
 
 from gui.initgui import StartUpMenu
 from gui.maingui import runmaingui
@@ -158,14 +223,23 @@ def initialization_tasks(startupmenu):
 
 def on_completion():
     print("Initialization complete! Starting main application...")
-    
+    # Launch the main GUI after initialization is complete
+    from gui.maingui import runmaingui
+    runmaingui()
+
 def init():
     """Initialize the application"""
+    # Check for already running instance
+    if not acquire_app_lock():
+        print("Another instance of Oversee is already running. Exiting.")
+        return
+    
     try:
         # Create data directory
         os.makedirs(settings.DATA_DIR, exist_ok=True)
         
         # Initialize database
+        from gui.initgui import init_database
         init_database()
         
         # Install Playwright browsers if needed
@@ -180,17 +254,17 @@ def init():
         except Exception as e:
             print(f"Warning: Failed to install Playwright browsers: {e}")
         
-        # Start GUI
-        from gui.initgui import init_gui
-        init_gui()
+        # Start GUI with initialization tasks
+        startupmenu = StartUpMenu()
+        startupmenu.start_with_tasks(initialization_tasks, on_completion)
         
     except Exception as e:
         print(f"Error during initialization: {e}")
         sys.exit(1)
+    finally:
+        # Always release the lock when done
+        release_app_lock()
 
 if __name__ == "__main__":
-    # INIT
-    startupmenu = StartUpMenu()
-    startupmenu.start_with_tasks(initialization_tasks, on_completion)
-    # MAIN
-    runmaingui()
+    # Use the centralized init function instead of calling runmaingui directly
+    init()
