@@ -98,9 +98,90 @@ def release_app_lock():
 
 from gui.initgui import StartUpMenu
 from gui.maingui import runmaingui
+
+# Ensure we can import settings properly
+try:
+    import settings
+    print(f"Settings imported successfully from: {settings.__file__}")
+except ImportError as e:
+    print(f"Failed to import settings: {e}")
+    print(f"Current working directory: {os.getcwd()}")
+    print(f"Python path: {sys.path}")
+    
+    # Try to add the correct directories to path if we're in a packaged app
+    if getattr(sys, 'frozen', False):
+        # Running as a PyInstaller bundle
+        print("Detected PyInstaller bundle execution")
+        bundle_dir = sys._MEIPASS
+        print(f"Bundle directory: {bundle_dir}")
+        
+        # Add multiple possible source directories
+        possible_src_dirs = [
+            os.path.join(bundle_dir, 'src'),
+            os.path.join(bundle_dir),
+            bundle_dir,
+        ]
+        
+        for src_dir in possible_src_dirs:
+            if os.path.exists(src_dir) and src_dir not in sys.path:
+                sys.path.insert(0, src_dir)
+                print(f"Added to path: {src_dir}")
+    else:
+        # Running as a script - ensure src directory is in path
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        src_dir = script_dir  # We're already in src/
+        if src_dir not in sys.path:
+            sys.path.insert(0, src_dir)
+            print(f"Added script src dir to path: {src_dir}")
+    
+    # Try importing again
+    try:
+        import settings
+        print("Settings imported successfully after path adjustment")
+    except ImportError as e2:
+        print(f"Still failed to import settings after path adjustment: {e2}")
+        print("Available files in bundle:")
+        if getattr(sys, 'frozen', False):
+            try:
+                for root, dirs, files in os.walk(sys._MEIPASS):
+                    level = root.replace(sys._MEIPASS, '').count(os.sep)
+                    indent = ' ' * 2 * level
+                    print(f"{indent}{os.path.basename(root)}/")
+                    subindent = ' ' * 2 * (level + 1)
+                    for file in files[:10]:  # Limit to first 10 files per directory
+                        print(f"{subindent}{file}")
+                    if len(files) > 10:
+                        print(f"{subindent}... and {len(files) - 10} more files")
+            except Exception as walk_e:
+                print(f"Could not walk bundle directory: {walk_e}")
+        
+        # Try a different approach - look for settings.py specifically
+        try:
+            import importlib.util
+            if getattr(sys, 'frozen', False):
+                settings_path = os.path.join(sys._MEIPASS, 'settings.py')
+                if not os.path.exists(settings_path):
+                    settings_path = os.path.join(sys._MEIPASS, 'src', 'settings.py')
+            else:
+                settings_path = os.path.join(os.path.dirname(__file__), 'settings.py')
+            
+            if os.path.exists(settings_path):
+                print(f"Found settings.py at: {settings_path}")
+                spec = importlib.util.spec_from_file_location("settings", settings_path)
+                settings = importlib.util.module_from_spec(spec)
+                sys.modules["settings"] = settings
+                spec.loader.exec_module(settings)
+                print("Settings imported via direct file loading")
+            else:
+                print(f"Could not find settings.py at expected location: {settings_path}")
+                sys.exit(1)
+        except Exception as e3:
+            print(f"Direct file loading also failed: {e3}")
+            sys.exit(1)
+
 def initialization_tasks(startupmenu):
     startupmenu.update_status("Loading program settings", 5.0)
-    import settings
+    # Settings is now imported at module level
     startupmenu.update_status("Loaded program settings", 10.0)
     
     # Install Playwright browsers if needed

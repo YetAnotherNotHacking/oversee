@@ -77,10 +77,9 @@ jobs:
               sips -z 512 512 assets/logo.png --out SilverFlagOVERSEE.iconset/icon_512x512.png
               cp assets/logo.png SilverFlagOVERSEE.iconset/icon_512x512@2x.png
               iconutil -c icns SilverFlagOVERSEE.iconset
-              pyinstaller --windowed --icon=SilverFlagOVERSEE.icns src/main.py --name SilverFlagOVERSEE --distpath dist
-            else
-              pyinstaller --windowed src/main.py --name SilverFlagOVERSEE --distpath dist
             fi
+            # Use the spec file for better dependency management
+            pyinstaller SilverFlagOVERSEE.spec --distpath dist
           elif [[ "$RUNNER_OS" == "Windows" ]]; then
             # Windows with icon
             if [ -f "assets/logo.png" ]; then
@@ -97,16 +96,16 @@ jobs:
               sys.exit(0)  # Don't fail the build
           "
               if [ -f "logo.ico" ]; then
-                pyinstaller --onefile --windowed --icon=logo.ico src/main.py --name SilverFlagOVERSEE --distpath dist
+                pyinstaller --onefile --windowed --icon=logo.ico src/main.py --name SilverFlagOVERSEE --distpath dist --add-data "src/data;src/data" --hidden-import settings
               else
-                pyinstaller --onefile --windowed src/main.py --name SilverFlagOVERSEE --distpath dist
+                pyinstaller --onefile --windowed src/main.py --name SilverFlagOVERSEE --distpath dist --add-data "src/data;src/data" --hidden-import settings
               fi
             else
-              pyinstaller --onefile --windowed src/main.py --name SilverFlagOVERSEE --distpath dist
+              pyinstaller --onefile --windowed src/main.py --name SilverFlagOVERSEE --distpath dist --add-data "src/data;src/data" --hidden-import settings
             fi
           else
             # Linux
-            pyinstaller --onefile --windowed src/main.py --name SilverFlagOVERSEE --distpath dist
+            pyinstaller --onefile --windowed src/main.py --name SilverFlagOVERSEE --distpath dist --add-data "src/data:src/data" --hidden-import settings
           fi
         shell: bash
 
