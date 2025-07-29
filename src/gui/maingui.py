@@ -49,7 +49,7 @@ class MainGUI:
         self.root = root
         self.root.title(f"SilverFlag | OVERSEE Device Manager v{settings.overseeversion}")
         self.root.geometry("1200x800")
-        self.root.minsize(800, 600)
+        self.root.minsize(900, 600)
         
         # Initialize view state tracking
         self.active_view = "list"
@@ -154,6 +154,10 @@ class MainGUI:
         
         # Start background camera status checker
         self.start_camera_status_checker()
+        
+        # Ensure proper initial sizing
+        self.root.update_idletasks()
+        self.root.after(100, self.ensure_proper_sizing)
         
     def init_database(self):
         """Initialize SQLite database for camera status tracking"""
@@ -309,9 +313,9 @@ class MainGUI:
         # Create menu bar
         self.create_menu_bar()
         
-        # Create main container
+        # Create main container with better padding
         main_frame = ttk.Frame(self.root)
-        main_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+        main_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
         main_frame.grid_rowconfigure(0, weight=1)
         main_frame.grid_columnconfigure(0, weight=1)
         
@@ -331,13 +335,13 @@ class MainGUI:
         cameras_frame = ttk.Frame(self.main_notebook)
         self.main_notebook.add(cameras_frame, text="Cameras")
         
-        # Configure grid for cameras frame
+        # Configure grid for cameras frame with better padding
         cameras_frame.grid_rowconfigure(0, weight=1)
         cameras_frame.grid_columnconfigure(0, weight=1)
         
         # Create notebook for camera views
         self.notebook = ttk.Notebook(cameras_frame)
-        self.notebook.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        self.notebook.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
         
         # Create camera view tabs
         self.create_map_view()
@@ -814,7 +818,9 @@ class MainGUI:
             self.preview_active = False
             if self.current_preview_thread and self.current_preview_thread.is_alive():
                 self.current_preview_thread.join(timeout=1)
-            self.image_label.config(image='', text="Select a camera to view preview")
+            self.image_canvas.delete("all")
+            self.image_canvas.create_text(160, 120, text="Select a camera to view preview", 
+                                        fill='white', font=('Arial', 10), anchor='center')
 
     def load_ip_addresses(self):
         """Load IP addressses from file and populate the treeview"""
@@ -892,7 +898,9 @@ class MainGUI:
         self.prop_resolution.config(text=f"Resolution: {camera_info.get('resolution', '-')}")
         
         # Always try to start preview, but show appropriate status
-        self.image_label.config(image='', text="Initializing camera connection...")
+        self.image_canvas.delete("all")
+        self.image_canvas.create_text(160, 120, text="Initializing camera connection...", 
+                                    fill='white', font=('Arial', 10), anchor='center')
         
         # Start camera check in a separate thread
         threading.Thread(
@@ -944,8 +952,10 @@ class MainGUI:
             test_frame = capture_single_frame(camera_url)
             if test_frame is None:
                 print(f"Failed to capture test frame from {camera_url}")
-                self.image_label.after(0, lambda: self.image_label.config(
-                    image='', text="Camera not responding"
+                self.image_canvas.after(0, lambda: self.image_canvas.delete("all"))
+                self.image_canvas.after(0, lambda: self.image_canvas.create_text(
+                    160, 120, text="Camera not responding", 
+                    fill='white', font=('Arial', 10), anchor='center'
                 ))
                 return
             
@@ -965,16 +975,29 @@ class MainGUI:
                     with frame_lock:
                         frame = camera_frames.get(camera_url)
                         if frame is not None:
+                            # Resize frame to fit the fixed canvas size (320x240)
+                            canvas_width = 320
+                            canvas_height = 240
+                            
+                            original_height, original_width = frame.shape[:2]
+                            width_ratio = canvas_width / original_width
+                            height_ratio = canvas_height / original_height
+                            scale_factor = min(width_ratio, height_ratio, 1.0)
+                            
+                            new_width = int(original_width * scale_factor)
+                            new_height = int(original_height * scale_factor)
+                            
                             # Resize frame for display
-                            frame = cv2.resize(frame, (320, 240))
+                            frame = cv2.resize(frame, (new_width, new_height))
+                            
                             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                             
                             # Convert to PhotoImage
                             img = Image.fromarray(frame_rgb)
                             photo = ImageTk.PhotoImage(img)
                             
-                            # Update label in main thread
-                            self.image_label.after(0, lambda p=photo: self.update_preview_image(p))
+                            # Update canvas in main thread
+                            self.image_canvas.after(0, lambda p=photo: self.update_preview_image(p))
                             
                             # Get metadata
                             metadata = camera_metadata.get(camera_url, {})
@@ -982,34 +1005,70 @@ class MainGUI:
                             self.prop_status.config(text=f"Status: {metadata.get('stream_type', 'Unknown')}")
                         else:
                             # Update status if no frame available
-                            self.image_label.after(0, lambda: self.image_label.config(
-                                image='', text="Waiting for camera feed..."
+                            self.image_canvas.after(0, lambda: self.image_canvas.delete("all"))
+                            self.image_canvas.after(0, lambda: self.image_canvas.create_text(
+                                160, 120, text="Waiting for camera feed...", 
+                                fill='white', font=('Arial', 10), anchor='center'
                             ))
                     
                     time.sleep(0.1)  # Limit frame rate
                 
                 except Exception as e:
                     print(f"Error in preview loop: {str(e)}")  # Debug log
-                    self.image_label.after(0, lambda: self.image_label.config(
-                        image='', text=f"Preview error: {str(e)}"
+                    self.image_canvas.after(0, lambda: self.image_canvas.delete("all"))
+                    self.image_canvas.after(0, lambda: self.image_canvas.create_text(
+                        160, 120, text=f"Preview error: {str(e)}", 
+                        fill='white', font=('Arial', 10), anchor='center'
                     ))
                     time.sleep(1)  # Wait before retrying
         
         except Exception as e:
             print(f"Fatal error in camera preview: {str(e)}")  # Debug log
-            self.image_label.after(0, lambda: self.image_label.config(
-                image='', text=f"Camera error: {str(e)}"
+            self.image_canvas.after(0, lambda: self.image_canvas.delete("all"))
+            self.image_canvas.after(0, lambda: self.image_canvas.create_text(
+                160, 120, text=f"Camera error: {str(e)}", 
+                fill='white', font=('Arial', 10), anchor='center'
             ))
 
     def update_preview_image(self, photo):
         """Update preview image in main thread"""
         try:
             # Store old image for cleanup
-            if hasattr(self.image_label, 'image'):
-                self.image_queue.put(self.image_label.image)
+            if hasattr(self, 'current_preview_image'):
+                self.image_queue.put(self.current_preview_image)
             
-            self.image_label.config(image=photo, text='')
-            self.image_label.image = photo  # Keep a reference to prevent garbage collection
+            # Clear canvas and display new image
+            self.image_canvas.delete("all")
+            
+            # Calculate scaling to fit the fixed canvas size (320x240)
+            canvas_width = 320
+            canvas_height = 240
+            
+            original_width = photo.width()
+            original_height = photo.height()
+            
+            # Calculate scaling factors to fit within canvas
+            width_ratio = canvas_width / original_width
+            height_ratio = canvas_height / original_height
+            scale_factor = min(width_ratio, height_ratio, 1.0)  # Don't scale up
+            
+            if scale_factor < 1.0:
+                # Create resized image
+                from PIL import Image, ImageTk
+                pil_image = Image.open(photo)
+                new_width = int(original_width * scale_factor)
+                new_height = int(original_height * scale_factor)
+                resized_image = pil_image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                photo = ImageTk.PhotoImage(resized_image)
+            
+            # Calculate position to center the image
+            x_pos = (canvas_width - photo.width()) // 2
+            y_pos = (canvas_height - photo.height()) // 2
+            
+            # Display image on canvas
+            self.image_canvas.create_image(x_pos, y_pos, image=photo, anchor="nw")
+            self.current_preview_image = photo  # Keep a reference to prevent garbage collection
+            
         except tk.TclError:
             pass
         
@@ -1221,6 +1280,29 @@ class MainGUI:
         # Open focused map window
         FocusedMapWindow(self.root, ip)
 
+    def ensure_proper_sizing(self):
+        """Ensure all elements are properly sized after window creation"""
+        try:
+            # Force update of all widgets
+            self.root.update_idletasks()
+            
+            # Update tree column widths if tree exists
+            if hasattr(self, 'tree'):
+                tree_width = self.tree.winfo_width()
+                if tree_width > 100:
+                    id_width = max(40, tree_width * 0.15)
+                    name_width = max(150, tree_width * 0.55)
+                    status_width = max(80, tree_width * 0.30)
+                    
+                    self.tree.column('#0', width=int(id_width))
+                    self.tree.column('Name', width=int(name_width))
+                    self.tree.column('Status', width=int(status_width))
+            
+        except Exception as e:
+            print(f"Error ensuring proper sizing: {e}")
+
+
+
     def count_valid_ips(self):
         """Count the number of valid IPs in the file"""
         try:
@@ -1340,24 +1422,26 @@ class MainGUI:
         # Bind tab change event
         self.notebook.bind('<<NotebookTabChanged>>', self.on_tab_change)
         
-        list_frame.grid_rowconfigure(1, weight=1)  # Changed to 1 to make room for search
+        # Configure grid weights for better resizing
+        list_frame.grid_rowconfigure(1, weight=1)
         list_frame.grid_columnconfigure(0, weight=1)
         list_frame.grid_columnconfigure(1, weight=2)
         
         # Add search frame at the top
         search_frame = ttk.Frame(list_frame)
         search_frame.grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 5))
+        search_frame.grid_columnconfigure(1, weight=1)  # Make search entry expand
         
         # Search label and entry
-        ttk.Label(search_frame, text="Search:").pack(side="left", padx=(0, 5))
+        ttk.Label(search_frame, text="Search:").grid(row=0, column=0, padx=(0, 5), sticky="w")
         self.search_var = tk.StringVar()
-        self.search_var.trace('w', self.on_search_change)  # Bind to search changes
-        search_entry = ttk.Entry(search_frame, textvariable=self.search_var, width=40)
-        search_entry.pack(side="left", fill="x", expand=True)
+        self.search_var.trace('w', self.on_search_change)
+        search_entry = ttk.Entry(search_frame, textvariable=self.search_var)
+        search_entry.grid(row=0, column=1, sticky="ew", padx=(0, 5))
         
         # Add reset button
         reset_button = ttk.Button(search_frame, text="Reset List", command=self.reset_list_view)
-        reset_button.pack(side="left", padx=5)
+        reset_button.grid(row=0, column=2, padx=5)
         
         # Left panel - scrollable list
         left_panel = ttk.Frame(list_frame)
@@ -1371,15 +1455,16 @@ class MainGUI:
         self.tree.heading('Name', text='IP Address')
         self.tree.heading('Status', text='Status')
         
-        self.tree.column('#0', width=50)
-        self.tree.column('Name', width=150)
-        self.tree.column('Status', width=100)
+        # Set minimum column widths and make them expandable
+        self.tree.column('#0', width=50, minwidth=40)
+        self.tree.column('Name', width=200, minwidth=150)
+        self.tree.column('Status', width=120, minwidth=80)
         
         # Configure status colors
-        self.tree.tag_configure('online', background='#1a472a', foreground='#ffffff')  # Dark green
-        self.tree.tag_configure('offline', background='#4a1a1a', foreground='#ffffff')  # Dark red
-        self.tree.tag_configure('error', background='#4a3a1a', foreground='#ffffff')    # Dark yellow
-        self.tree.tag_configure('unknown', background='#2b2b2b', foreground='#ffffff')  # Dark gray
+        self.tree.tag_configure('online', background='#1a472a', foreground='#ffffff')
+        self.tree.tag_configure('offline', background='#4a1a1a', foreground='#ffffff')
+        self.tree.tag_configure('error', background='#4a3a1a', foreground='#ffffff')
+        self.tree.tag_configure('unknown', background='#2b2b2b', foreground='#ffffff')
         
         # Initialize camera data storage
         self.camera_data = {}
@@ -1403,26 +1488,38 @@ class MainGUI:
         # Bind selection event
         self.tree.bind('<<TreeviewSelect>>', self.on_item_select)
         
-        # Right panel - details view
+        # Right panel - details view with proper grid configuration
         right_panel = ttk.Frame(list_frame)
         right_panel.grid(row=1, column=1, sticky="nsew", padx=(5, 10), pady=10)
-        right_panel.grid_rowconfigure(1, weight=1)
+        
+        # Configure right panel grid weights for proper resizing
+        right_panel.grid_rowconfigure(0, weight=0)  # Image frame - fixed height
+        right_panel.grid_rowconfigure(1, weight=0)  # Quick actions - fixed height
+        right_panel.grid_rowconfigure(2, weight=1)  # Properties - expandable
         right_panel.grid_columnconfigure(0, weight=1)
         
-        # Image display area
+        # Image display area with fixed size
         self.image_frame = ttk.LabelFrame(right_panel, text="Camera Preview", padding=10)
         self.image_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        self.image_frame.grid_columnconfigure(0, weight=1)
         
-        # Placeholder for image
-        self.image_label = ttk.Label(self.image_frame, text="Select a camera to view preview", 
-                                width=40, anchor='center')
-        self.image_label.grid(row=0, column=0, pady=20, ipady=50)
+        # Create a fixed-size canvas for the image preview
+        self.image_canvas = tk.Canvas(self.image_frame, width=320, height=240, bg='#2b2b2b', highlightthickness=0)
+        self.image_canvas.grid(row=0, column=0, pady=5)
         
-        # Quick Actions Frame
+        # Placeholder text in canvas
+        self.image_canvas.create_text(160, 120, text="Select a camera to view preview", 
+                                    fill='white', font=('Arial', 10), anchor='center')
+        
+        # Quick Actions Frame with scrollable content
         quick_actions_frame = ttk.LabelFrame(right_panel, text="Quick Actions", padding=10)
         quick_actions_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
         
-        # Create quick action buttons in a grid
+        # Configure quick actions frame grid
+        quick_actions_frame.grid_columnconfigure(0, weight=1)
+        quick_actions_frame.grid_columnconfigure(1, weight=1)
+        
+        # Create quick action buttons in a grid with proper spacing
         actions = [
             ("Deep Analysis", self.analyze_host),
             ("Open Stream", self.open_camera_stream),
@@ -1433,33 +1530,52 @@ class MainGUI:
             ("Move Camera", self.open_move_camera_window)
         ]
         
-        # Create buttons in a grid layout
+        # Create buttons in a grid layout with reasonable spacing
         for i, (text, command) in enumerate(actions):
             row = i // 2
             col = i % 2
             btn = ttk.Button(quick_actions_frame, text=text, command=command)
-            btn.grid(row=row, column=col, padx=5, pady=5, sticky="ew")
+            btn.grid(row=row, column=col, padx=5, pady=3, sticky="ew", ipady=2)
         
-        # Configure grid weights for even spacing
-        quick_actions_frame.grid_columnconfigure(0, weight=1)
-        quick_actions_frame.grid_columnconfigure(1, weight=1)
-        
-        # Properties frame
+        # Properties frame with scrollable content
         self.properties_frame = ttk.LabelFrame(right_panel, text="Properties", padding=10)
         self.properties_frame.grid(row=2, column=0, sticky="nsew", pady=(0, 10))
+        self.properties_frame.grid_columnconfigure(0, weight=1)
         
-        # Properties labels
-        self.prop_name = ttk.Label(self.properties_frame, text="IP Address: Select a camera", font=('Arial', 10, 'bold'))
+        # Create a canvas for scrollable properties
+        properties_canvas = tk.Canvas(self.properties_frame, height=150, highlightthickness=0)
+        properties_scrollbar = ttk.Scrollbar(self.properties_frame, orient="vertical", command=properties_canvas.yview)
+        properties_scrollable_frame = ttk.Frame(properties_canvas)
+        
+        properties_scrollable_frame.bind(
+            "<Configure>",
+            lambda e: properties_canvas.configure(scrollregion=properties_canvas.bbox("all"))
+        )
+        
+        properties_canvas.create_window((0, 0), window=properties_scrollable_frame, anchor="nw")
+        properties_canvas.configure(yscrollcommand=properties_scrollbar.set)
+        
+        # Properties labels in scrollable frame
+        self.prop_name = ttk.Label(properties_scrollable_frame, text="IP Address: Select a camera", 
+                                  font=('Arial', 10, 'bold'), wraplength=250)
         self.prop_name.grid(row=0, column=0, sticky="w", pady=2)
         
-        self.prop_location = ttk.Label(self.properties_frame, text="Location: -")
+        self.prop_location = ttk.Label(properties_scrollable_frame, text="Location: -", wraplength=250)
         self.prop_location.grid(row=1, column=0, sticky="w", pady=2)
         
-        self.prop_status = ttk.Label(self.properties_frame, text="Status: -")
+        self.prop_status = ttk.Label(properties_scrollable_frame, text="Status: -", wraplength=250)
         self.prop_status.grid(row=2, column=0, sticky="w", pady=2)
         
-        self.prop_resolution = ttk.Label(self.properties_frame, text="Resolution: -")
+        self.prop_resolution = ttk.Label(properties_scrollable_frame, text="Resolution: -", wraplength=250)
         self.prop_resolution.grid(row=3, column=0, sticky="w", pady=2)
+        
+        # Pack the canvas and scrollbar
+        properties_canvas.grid(row=0, column=0, sticky="nsew")
+        properties_scrollbar.grid(row=0, column=1, sticky="ns")
+        
+        # Configure properties frame grid weights
+        self.properties_frame.grid_rowconfigure(0, weight=1)
+        self.properties_frame.grid_columnconfigure(0, weight=1)
 
     def create_menu_bar(self):
         """Create the main menu bar"""
