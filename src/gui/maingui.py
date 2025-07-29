@@ -59,8 +59,8 @@ class MainGUI:
         self.status_checker_active = True
         self.is_shutting_down = False
         
-        # Initialize thread pool for camera checks
-        self.thread_pool = ThreadPoolExecutor(max_workers=4)
+        # Initialize thread pool for camera checks with more workers for faster checking
+        self.thread_pool = ThreadPoolExecutor(max_workers=8)
         
         # Initialize status checker thread
         self.status_checker_thread = None
@@ -232,7 +232,7 @@ class MainGUI:
                             break
                         # Submit camera check to thread pool
                         if not self.thread_pool._shutdown and not self.is_shutting_down:
-                            self.thread_pool.submit(self.check_camera_status, ip, ip)
+                            self.thread_pool.submit(self.check_camera_status_threaded, ip, ip)
                     
                     # Wait before next check
                     for _ in range(300):  # Check every 5 minutes, but check status every second
@@ -249,10 +249,14 @@ class MainGUI:
             self.status_checker_thread = threading.Thread(target=status_checker, daemon=True)
             self.status_checker_thread.start()
 
-    def check_camera_status(self, item_id, ip):
-        """Check if camera is accessible and update status"""
+    def check_camera_status_threaded(self, item_id, ip, delay=0):
+        """Check if camera is accessible and update status with threading"""
         if self.is_shutting_down or not hasattr(self, 'thread_pool') or self.thread_pool._shutdown:
             return
+        
+        # Add small delay to prevent overwhelming the system
+        if delay > 0:
+            time.sleep(delay)
             
         try:
             from backend.cameradown import capture_single_frame, default_stream_params
@@ -271,13 +275,13 @@ class MainGUI:
                         camera_url = f"{camera_url}{params}"
                     break
             
-            # Try to capture a frame
+            # Try to capture a frame with timeout
             frame = capture_single_frame(camera_url)
             
             if frame is not None:
                 height, width = frame.shape[:2]
                 resolution = f"{width}x{height}"
-                status = "Online"
+                status = "ONLINE"
                 
                 # Get location information
                 try:
@@ -308,6 +312,10 @@ class MainGUI:
             self.update_camera_status(ip=ip, status="Error")
             if not self.is_shutting_down:
                 self.tree.after(0, lambda: self.update_tree_item(item_id, ip, "Error"))
+
+    def check_camera_status(self, item_id, ip):
+        """Legacy method for backward compatibility"""
+        self.check_camera_status_threaded(item_id, ip)
         
     def setup_gui(self):
         # Create menu bar
@@ -823,7 +831,7 @@ class MainGUI:
                                         fill='white', font=('Arial', 10), anchor='center')
 
     def load_ip_addresses(self):
-        """Load IP addressses from file and populate the treeview"""
+        """Load IP addresses from file and populate the treeview with threaded status checking"""
         try:
             # Clear existing items
             for item in self.tree.get_children():
@@ -835,19 +843,22 @@ class MainGUI:
             # Populate treeview with IP addresses
             for i, ip in enumerate(ip_list, 1):
                 item_id = self.tree.insert('', 'end', text=str(i), 
-                                        values=(ip, "Unknown"))
+                                        values=(ip, "Checking..."))
+                
+                # Set initial checking status
+                self.tree.item(item_id, tags=('checking',))
                 
                 # Initialize camera data
                 self.camera_data[item_id] = {
                     'ip': ip,
-                    'status': 'Unknown',
+                    'status': 'Checking...',
                     'location': None,
                     'resolution': None,
                     'last_check': None
                 }
                 
-                # Submit camera check to thread pool
-                self.thread_pool.submit(self.check_camera_status, item_id, ip)
+                # Submit camera check to thread pool with delay to prevent overwhelming
+                self.thread_pool.submit(self.check_camera_status_threaded, item_id, ip, i * 0.1)
                 
         except Exception as e:
             print(f"Error loading IP addresses: {e}")
@@ -868,8 +879,10 @@ class MainGUI:
                 self.tree.item(item_id, tags=('online',))
                 # Move online items to top
                 self.tree.move(item_id, '', 0)
-            elif status == "offline":
+            elif status == "Offline":
                 self.tree.item(item_id, tags=('offline',))
+            elif status == "Checking...":
+                self.tree.item(item_id, tags=('checking',))
             elif status == "Error":
                 self.tree.item(item_id, tags=('error',))
             else:
@@ -1460,11 +1473,12 @@ class MainGUI:
         self.tree.column('Name', width=200, minwidth=150)
         self.tree.column('Status', width=120, minwidth=80)
         
-        # Configure status colors
-        self.tree.tag_configure('online', background='#1a472a', foreground='#ffffff')
-        self.tree.tag_configure('offline', background='#4a1a1a', foreground='#ffffff')
-        self.tree.tag_configure('error', background='#4a3a1a', foreground='#ffffff')
-        self.tree.tag_configure('unknown', background='#2b2b2b', foreground='#ffffff')
+        # Configure status colors with better visibility
+        self.tree.tag_configure('online', background='#2b2b2b', foreground='#00ff00')  # Green text
+        self.tree.tag_configure('offline', background='#2b2b2b', foreground='#ff0000')  # Red text
+        self.tree.tag_configure('checking', background='#2b2b2b', foreground='#ffff00')  # Yellow text
+        self.tree.tag_configure('error', background='#2b2b2b', foreground='#ff6600')    # Orange text
+        self.tree.tag_configure('unknown', background='#2b2b2b', foreground='#ffffff')  # White text
         
         # Initialize camera data storage
         self.camera_data = {}
