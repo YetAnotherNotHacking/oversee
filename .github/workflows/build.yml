@@ -478,10 +478,10 @@ jobs:
           !define APP_EXE \"{exe_name}\"
 
           ; Installer attributes
-          Name \"\${{APP_NAME}}\"
+          Name \"${{APP_NAME}}\"
           OutFile \"dist\\\\{installer_name}\"
-          InstallDir \"\$PROGRAMFILES64\\\\\${{APP_NAME}}\"
-          InstallDirRegKey HKLM \"Software\\\\\${{APP_NAME}}\" \"Install_Dir\"
+          InstallDir \"$PROGRAMFILES64\\\\${{APP_NAME}}\"
+          InstallDirRegKey HKLM \"Software\\\\${{APP_NAME}}\" \"Install_Dir\"
           RequestExecutionLevel admin
 
           ; Modern UI
@@ -493,8 +493,8 @@ jobs:
             !define MUI_ICON \"logo.ico\"
             !define MUI_UNICON \"logo.ico\"
           !else
-            !define MUI_ICON \"\${{NSISDIR}}\\\\Contrib\\\\Graphics\\\\Icons\\\\modern-install.ico\"
-            !define MUI_UNICON \"\${{NSISDIR}}\\\\Contrib\\\\Graphics\\\\Icons\\\\modern-uninstall.ico\"
+            !define MUI_ICON \"${{NSISDIR}}\\\\Contrib\\\\Graphics\\\\Icons\\\\modern-install.ico\"
+            !define MUI_UNICON \"${{NSISDIR}}\\\\Contrib\\\\Graphics\\\\Icons\\\\modern-uninstall.ico\"
           !endif
 
           ; Pages
@@ -515,7 +515,7 @@ jobs:
 
           ; Installer sections
           Section \"Install\"
-            SetOutPath \$INSTDIR
+            SetOutPath $INSTDIR
             File \"dist\\\\{exe_name}\"
             
             ; Install Visual C++ Redistributable for Windows 7 compatibility
@@ -524,43 +524,43 @@ jobs:
             {'Delete "$INSTDIR\\\\vcredist_x64.exe"' if '${{ matrix.build-type }}' == 'win7-compatible' else ''}
             
             ; Create start menu shortcut
-            CreateDirectory \"\$SMPROGRAMS\\\\\${{APP_NAME}}\"
-            CreateShortcut \"\$SMPROGRAMS\\\\\${{APP_NAME}}\\\\\${{APP_NAME}}.lnk\" \"\$INSTDIR\\\\\${{APP_EXE}}\"
-            CreateShortcut \"\$SMPROGRAMS\\\\\${{APP_NAME}}\\\\Uninstall.lnk\" \"\$INSTDIR\\\\uninstall.exe\"
+            CreateDirectory \"$SMPROGRAMS\\\\${{APP_NAME}}\"
+            CreateShortcut \"$SMPROGRAMS\\\\${{APP_NAME}}\\\\${{APP_NAME}}.lnk\" \"$INSTDIR\\\\${{APP_EXE}}\"
+            CreateShortcut \"$SMPROGRAMS\\\\${{APP_NAME}}\\\\Uninstall.lnk\" \"$INSTDIR\\\\uninstall.exe\"
             
             ; Create desktop shortcut
-            CreateShortcut \"\$DESKTOP\\\\\${{APP_NAME}}.lnk\" \"\$INSTDIR\\\\\${{APP_EXE}}\"
+            CreateShortcut \"$DESKTOP\\\\${{APP_NAME}}.lnk\" \"$INSTDIR\\\\${{APP_EXE}}\"
             
             ; Write registry keys
-            WriteRegStr HKLM \"Software\\\\\${{APP_NAME}}\" \"Install_Dir\" \"\$INSTDIR\"
-            WriteRegStr HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\\${{APP_NAME}}\" \"DisplayName\" \"\${{APP_NAME}}\"
-            WriteRegStr HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\\${{APP_NAME}}\" \"UninstallString\" '\"\$INSTDIR\\\\uninstall.exe\"'
-            WriteRegStr HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\\${{APP_NAME}}\" \"DisplayVersion\" \"\${{APP_VERSION}}\"
-            WriteRegStr HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\\${{APP_NAME}}\" \"Publisher\" \"\${{APP_PUBLISHER}}\"
-            WriteRegStr HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\\${{APP_NAME}}\" \"URLInfoAbout\" \"\${{APP_URL}}\"
-            WriteRegDWORD HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\\${{APP_NAME}}\" \"NoModify\" 1
-            WriteRegDWORD HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\\${{APP_NAME}}\" \"NoRepair\" 1
+            WriteRegStr HKLM \"Software\\\\${{APP_NAME}}\" \"Install_Dir\" \"$INSTDIR\"
+            WriteRegStr HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\${{APP_NAME}}\" \"DisplayName\" \"${{APP_NAME}}\"
+            WriteRegStr HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\${{APP_NAME}}\" \"UninstallString\" '\"$INSTDIR\\\\uninstall.exe\"'
+            WriteRegStr HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\${{APP_NAME}}\" \"DisplayVersion\" \"${{APP_VERSION}}\"
+            WriteRegStr HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\${{APP_NAME}}\" \"Publisher\" \"${{APP_PUBLISHER}}\"
+            WriteRegStr HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\${{APP_NAME}}\" \"URLInfoAbout\" \"${{APP_URL}}\"
+            WriteRegDWORD HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\${{APP_NAME}}\" \"NoModify\" 1
+            WriteRegDWORD HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\${{APP_NAME}}\" \"NoRepair\" 1
             
             ; Create uninstaller
-            WriteUninstaller \"\$INSTDIR\\\\uninstall.exe\"
+            WriteUninstaller \"$INSTDIR\\\\uninstall.exe\"
           SectionEnd
 
           ; Uninstaller section
           Section \"Uninstall\"
             ; Remove files
-            Delete \"\$INSTDIR\\\\\${{APP_EXE}}\"
-            Delete \"\$INSTDIR\\\\uninstall.exe\"
-            RMDir \"\$INSTDIR\"
+            Delete \"$INSTDIR\\\\${{APP_EXE}}\"
+            Delete \"$INSTDIR\\\\uninstall.exe\"
+            RMDir \"$INSTDIR\"
             
             ; Remove shortcuts
-            Delete \"\$SMPROGRAMS\\\\\${{APP_NAME}}\\\\\${{APP_NAME}}.lnk\"
-            Delete \"\$SMPROGRAMS\\\\\${{APP_NAME}}\\\\Uninstall.lnk\"
-            RMDir \"\$SMPROGRAMS\\\\\${{APP_NAME}}\"
-            Delete \"\$DESKTOP\\\\\${{APP_NAME}}.lnk\"
+            Delete \"$SMPROGRAMS\\\\${{APP_NAME}}\\\\${{APP_NAME}}.lnk\"
+            Delete \"$SMPROGRAMS\\\\${{APP_NAME}}\\\\Uninstall.lnk\"
+            RMDir \"$SMPROGRAMS\\\\${{APP_NAME}}\"
+            Delete \"$DESKTOP\\\\${{APP_NAME}}.lnk\"
             
             ; Remove registry keys
-            DeleteRegKey HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\\${{APP_NAME}}\"
-            DeleteRegKey HKLM \"Software\\\\\${{APP_NAME}}\"
+            DeleteRegKey HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\${{APP_NAME}}\"
+            DeleteRegKey HKLM \"Software\\\\${{APP_NAME}}\"
           SectionEnd
           '''
           
