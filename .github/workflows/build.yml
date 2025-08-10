@@ -1,82 +1,4 @@
-# Create NSIS installer script for Windows 
-      - name: Create NSIS installer script (Windows only)
-        if: runner.os == 'Windows'
-        run: |
-          cat > installer.nsi << 'NSIS_EOF'
-          Name "SilverFlagOVERSEE"
-          InstallDir "$PROGRAMFILES64\SilverFlagOVERSEE"
-          InstallDirRegKey HKLM "Software\SilverFlagOVERSEE" "Install_Dir"
-          RequestExecutionLevel admin
-
-          !include "MUI2.nsh"
-          
-          !if /FileExists "logo.ico"
-            !define MUI_ICON "logo.ico"
-            !define MUI_UNICON "logo.ico"
-          !endif
-
-          !insertmacro MUI_PAGE_WELCOME
-          !insertmacro MUI_PAGE_LICENSE "LICENSE.txt"
-          !insertmacro MUI_PAGE_DIRECTORY
-          !insertmacro MUI_PAGE_INSTFILES
-          !insertmacro MUI_PAGE_FINISH
-
-          !insertmacro MUI_UNPAGE_WELCOME
-          !insertmacro MUI_UNPAGE_CONFIRM
-          !insertmacro MUI_UNPAGE_INSTFILES
-          !insertmacro MUI_UNPAGE_FINISH
-
-          !insertmacro MUI_LANGUAGE "English"
-
-          Section "Install"
-            SetOutPath $INSTDIR
-            
-            CreateDirectory "$SMPROGRAMS\SilverFlagOVERSEE"
-            CreateShortcut "$SMPROGRAMS\SilverFlagOVERSEE\Uninstall.lnk" "$INSTDIR\uninstall.exe"
-            CreateShortcut "$DESKTOP\SilverFlagOVERSEE.lnk" "$INSTDIR\SilverFlagOVERSEE.exe"
-            
-            WriteRegStr HKLM "Software\SilverFlagOVERSEE" "Install_Dir" "$INSTDIR"
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SilverFlagOVERSEE" "DisplayName" "SilverFlagOVERSEE"
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SilverFlagOVERSEE" "UninstallString" "$INSTDIR\uninstall.exe"
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SilverFlagOVERSEE" "DisplayVersion" "1.0.0"
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SilverFlagOVERSEE" "Publisher" "Your Company"
-            WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SilverFlagOVERSEE" "NoModify" 1
-            WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SilverFlagOVERSEE" "NoRepair" 1
-            
-            WriteUninstaller "$INSTDIR\uninstall.exe"
-          SectionEnd
-
-          Section "Uninstall"
-            Delete "$INSTDIR\SilverFlagOVERSEE.exe"
-            Delete "$INSTDIR\SilverFlagOVERSEE-Win7.exe"
-            Delete "$INSTDIR\uninstall.exe"
-            RMDir "$INSTDIR"
-            
-            Delete "$SMPROGRAMS\SilverFlagOVERSEE\SilverFlagOVERSEE.lnk"
-            Delete "$SMPROGRAMS\SilverFlagOVERSEE\Uninstall.lnk"
-            RMDir "$SMPROGRAMS\SilverFlagOVERSEE"
-            Delete "$DESKTOP\SilverFlagOVERSEE.lnk"
-            
-            DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SilverFlagOVERSEE"
-            DeleteRegKey HKLM "Software\SilverFlagOVERSEE"
-          SectionEnd
-          NSIS_EOF
-          
-          # Now modify the script based on build type
-          if [[ "${{ matrix.build-type }}" == "win7-compatible" ]]; then
-            sed -i '1i\OutFile "dist\\SilverFlagOVERSEE-Win7-Installer.exe"' installer.nsi
-            sed -i '/SetOutPath \$INSTDIR/a\\    File "dist\\SilverFlagOVERSEE-Win7.exe"\n    File "vcredist_x64.exe"\n    ExecWait "$INSTDIR\\vcredist_x64.exe /quiet"\n    Delete "$INSTDIR\\vcredist_x64.exe"' installer.nsi
-            sed -i 's/CreateShortcut "$SMPROGRAMS\\SilverFlagOVERSEE\\SilverFlagOVERSEE.lnk"/CreateShortcut "$SMPROGRAMS\\SilverFlagOVERSEE\\SilverFlagOVERSEE.lnk" "$INSTDIR\\SilverFlagOVERSEE-Win7.exe"/' installer.nsi
-            sed -i 's/CreateShortcut "$DESKTOP\\SilverFlagOVERSEE.lnk"/CreateShortcut "$DESKTOP\\SilverFlagOVERSEE.lnk" "$INSTDIR\\SilverFlagOVERSEE-Win7.exe"/' installer.nsi
-          else
-            sed -i '1i\OutFile "dist\\SilverFlagOVERSEE-Installer.exe"' installer.nsi
-            sed -i '/SetOutPath \$INSTDIR/a\\    File "dist\\SilverFlagOVERSEE.exe"' installer.nsi
-            sed -i 's/CreateShortcut "$SMPROGRAMS\\SilverFlagOVERSEE\\SilverFlagOVERSEE.lnk"/CreateShortcut "$SMPROGRAMS\\SilverFlagOVERSEE\\SilverFlagOVERSEE.lnk" "$INSTDIR\\SilverFlagOVERSEE.exe"/' installer.nsi
-            sed -i 's/CreateShortcut "$DESKTOP\\SilverFlagOVERSEE.lnk"/CreateShortcut "$DESKTOP\\SilverFlagOVERSEE.lnk" "$INSTDIR\\SilverFlagOVERSEE.exe"/' installer.nsi
-          fi
-          
-          echo "NSIS installer script created successfully"
-        shell: bashname: Build Binaries
+name: Build Binaries
 
 on:
   push:
@@ -88,21 +10,7 @@ jobs:
   build:
     strategy:
       matrix:
-        include:
-          # Modern Windows build
-          - os: windows-latest
-            python-version: '3.10'
-            build-type: 'modern'
-          # Windows 7 compatible build
-          - os: windows-2019
-            python-version: '3.8'
-            build-type: 'win7-compatible'
-          - os: ubuntu-latest
-            python-version: '3.10'
-            build-type: 'standard'
-          - os: macos-latest
-            python-version: '3.10'
-            build-type: 'standard'
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -112,23 +20,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.10'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          
-          # Install Windows 7 compatible PyInstaller version
-          if [[ "${{ matrix.build-type }}" == "win7-compatible" ]]; then
-            # Use PyInstaller 4.10 which has better Windows 7 support
-            pip install pyinstaller==4.10
-            # Install Windows 7 compatible dependencies
-            pip install pywin32==304 pefile==2022.5.30
-          else
-            pip install pyinstaller
-          fi
-        shell: bash
+          pip install pyinstaller
 
       # Windows-specific: Install NSIS for installer creation
       - name: Install NSIS (Windows only)
@@ -161,118 +59,6 @@ jobs:
             sudo mv appimagetool /usr/local/bin/appimagetool
           fi
 
-      # Create Windows 7 compatibility manifest
-      - name: Create Windows 7 compatibility manifest
-        if: matrix.build-type == 'win7-compatible'
-        run: |
-          cat > app.manifest << 'MANIFEST_EOF'
-          <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-          <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-            <assemblyIdentity
-              version="1.0.0.0"
-              processorArchitecture="*"
-              name="SilverFlagOVERSEE"
-              type="win32"
-            />
-            <description>SilverFlag OVERSEE Application</description>
-            <dependency>
-              <dependentAssembly>
-                <assemblyIdentity
-                  type="win32"
-                  name="Microsoft.Windows.Common-Controls"
-                  version="6.0.0.0"
-                  processorArchitecture="*"
-                  publicKeyToken="6595b64144ccf1df"
-                  language="*"
-                />
-              </dependentAssembly>
-            </dependency>
-            <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
-              <application>
-                <!-- Windows 7 -->
-                <supportedOS Id="{35138b9a-5d96-4fbd-8e2d-a2440225f93a}"/>
-                <!-- Windows 8 -->
-                <supportedOS Id="{4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38}"/>
-                <!-- Windows 8.1 -->
-                <supportedOS Id="{1f676c76-80e1-4239-95bb-83d0f6d0da78}"/>
-                <!-- Windows 10 -->
-                <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
-                <!-- Windows 11 -->
-                <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9b}"/>
-              </application>
-            </compatibility>
-            <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
-              <security>
-                <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
-                  <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
-                </requestedPrivileges>
-              </security>
-            </trustInfo>
-          </assembly>
-          MANIFEST_EOF
-        shell: bash
-
-      # Create Windows 7 specific PyInstaller spec file
-      - name: Create Windows 7 PyInstaller spec
-        if: matrix.build-type == 'win7-compatible'
-        run: |
-          cat > SilverFlagOVERSEE-Win7.spec << 'SPEC_EOF'
-          # -*- mode: python ; coding: utf-8 -*-
-          import sys
-          from PyInstaller.building.build_main import Analysis, PYZ, EXE
-          from PyInstaller.building.datastruct import Tree
-          
-          block_cipher = None
-          
-          a = Analysis(
-              ['src/main.py'],
-              pathex=[],
-              binaries=[],
-              datas=[],
-              hiddenimports=[
-                  'win32api', 'win32con', 'win32gui', 'win32process',
-                  'pywintypes', 'pythoncom', 'pkg_resources.py2_warn'
-              ],
-              hookspath=[],
-              hooksconfig={},
-              runtime_hooks=[],
-              excludes=[
-                  'tkinter', '_tkinter', 'unittest', 'test'
-              ],
-              win_no_prefer_redirects=False,
-              win_private_assemblies=False,
-              cipher=block_cipher,
-              noarchive=False,
-          )
-          
-          pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-          
-          exe = EXE(
-              pyz,
-              a.scripts,
-              a.binaries,
-              a.zipfiles,
-              a.datas,
-              [],
-              name='SilverFlagOVERSEE-Win7',
-              debug=False,
-              bootloader_ignore_signals=False,
-              strip=False,
-              upx=False,
-              upx_exclude=[],
-              runtime_tmpdir=None,
-              console=False,
-              disable_windowed_traceback=False,
-              argv_emulation=False,
-              target_arch=None,
-              codesign_identity=None,
-              entitlements_file=None,
-              manifest='app.manifest',
-              version_file=None,
-          )
-          SPEC_EOF
-        shell: bash
-
       - name: Build with PyInstaller
         run: |
           if [[ "$RUNNER_OS" == "macOS" ]]; then
@@ -296,8 +82,9 @@ jobs:
               pyinstaller --windowed src/main.py --name SilverFlagOVERSEE --distpath dist
             fi
           elif [[ "$RUNNER_OS" == "Windows" ]]; then
-            # Convert PNG to ICO for Windows
+            # Windows with icon
             if [ -f "assets/logo.png" ]; then
+              # Convert PNG to ICO for Windows using Python
               python -c "
           from PIL import Image
           import sys
@@ -309,20 +96,13 @@ jobs:
               print(f'Icon conversion failed: {e}')
               sys.exit(0)  # Don't fail the build
           "
-            fi
-            
-            # Build based on type
-            if [[ "${{ matrix.build-type }}" == "win7-compatible" ]]; then
-              echo "Building Windows 7 compatible version..."
-              # Use the spec file for Windows 7 build
-              pyinstaller SilverFlagOVERSEE-Win7.spec --distpath dist
-            else
-              echo "Building modern Windows version..."
               if [ -f "logo.ico" ]; then
                 pyinstaller --onefile --windowed --icon=logo.ico src/main.py --name SilverFlagOVERSEE --distpath dist
               else
                 pyinstaller --onefile --windowed src/main.py --name SilverFlagOVERSEE --distpath dist
               fi
+            else
+              pyinstaller --onefile --windowed src/main.py --name SilverFlagOVERSEE --distpath dist
             fi
           else
             # Linux
@@ -533,23 +313,17 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           python -c "
-          import os
-          
-          # Determine executable name based on build type
-          exe_name = 'SilverFlagOVERSEE-Win7.exe' if '${{ matrix.build-type }}' == 'win7-compatible' else 'SilverFlagOVERSEE.exe'
-          installer_name = 'SilverFlagOVERSEE-Win7-Installer.exe' if '${{ matrix.build-type }}' == 'win7-compatible' else 'SilverFlagOVERSEE-Installer.exe'
-          
-          nsis_content = f'''!define APP_NAME \"SilverFlagOVERSEE\"
+          nsis_content = '''!define APP_NAME \"SilverFlagOVERSEE\"
           !define APP_VERSION \"1.0.0\"
           !define APP_PUBLISHER \"Your Company\"
           !define APP_URL \"https://yourwebsite.com\"
-          !define APP_EXE \"{exe_name}\"
+          !define APP_EXE \"SilverFlagOVERSEE.exe\"
 
           ; Installer attributes
-          Name \"${{APP_NAME}}\"
-          OutFile \"dist\\\\{installer_name}\"
-          InstallDir \"$PROGRAMFILES64\\\\${{APP_NAME}}\"
-          InstallDirRegKey HKLM \"Software\\\\${{APP_NAME}}\" \"Install_Dir\"
+          Name \"\${APP_NAME}\"
+          OutFile \"dist\\\\SilverFlagOVERSEE-Installer.exe\"
+          InstallDir \"\$PROGRAMFILES64\\\\\${APP_NAME}\"
+          InstallDirRegKey HKLM \"Software\\\\\${APP_NAME}\" \"Install_Dir\"
           RequestExecutionLevel admin
 
           ; Modern UI
@@ -561,8 +335,8 @@ jobs:
             !define MUI_ICON \"logo.ico\"
             !define MUI_UNICON \"logo.ico\"
           !else
-            !define MUI_ICON \"${{NSISDIR}}\\\\Contrib\\\\Graphics\\\\Icons\\\\modern-install.ico\"
-            !define MUI_UNICON \"${{NSISDIR}}\\\\Contrib\\\\Graphics\\\\Icons\\\\modern-uninstall.ico\"
+            !define MUI_ICON \"\${NSISDIR}\\\\Contrib\\\\Graphics\\\\Icons\\\\modern-install.ico\"
+            !define MUI_UNICON \"\${NSISDIR}\\\\Contrib\\\\Graphics\\\\Icons\\\\modern-uninstall.ico\"
           !endif
 
           ; Pages
@@ -583,52 +357,47 @@ jobs:
 
           ; Installer sections
           Section \"Install\"
-            SetOutPath $INSTDIR
-            File \"dist\\\\{exe_name}\"
-            
-            ; Install Visual C++ Redistributable for Windows 7 compatibility
-            {'File "vcredist_x64.exe"' if '${{ matrix.build-type }}' == 'win7-compatible' else '; No additional redistributables needed'}
-            {'ExecWait "$INSTDIR\\\\vcredist_x64.exe /quiet"' if '${{ matrix.build-type }}' == 'win7-compatible' else ''}
-            {'Delete "$INSTDIR\\\\vcredist_x64.exe"' if '${{ matrix.build-type }}' == 'win7-compatible' else ''}
+            SetOutPath \$INSTDIR
+            File \"dist\\\\SilverFlagOVERSEE.exe\"
             
             ; Create start menu shortcut
-            CreateDirectory \"$SMPROGRAMS\\\\${{APP_NAME}}\"
-            CreateShortcut \"$SMPROGRAMS\\\\${{APP_NAME}}\\\\${{APP_NAME}}.lnk\" \"$INSTDIR\\\\${{APP_EXE}}\"
-            CreateShortcut \"$SMPROGRAMS\\\\${{APP_NAME}}\\\\Uninstall.lnk\" \"$INSTDIR\\\\uninstall.exe\"
+            CreateDirectory \"\$SMPROGRAMS\\\\\${APP_NAME}\"
+            CreateShortcut \"\$SMPROGRAMS\\\\\${APP_NAME}\\\\\${APP_NAME}.lnk\" \"\$INSTDIR\\\\\${APP_EXE}\"
+            CreateShortcut \"\$SMPROGRAMS\\\\\${APP_NAME}\\\\Uninstall.lnk\" \"\$INSTDIR\\\\uninstall.exe\"
             
             ; Create desktop shortcut
-            CreateShortcut \"$DESKTOP\\\\${{APP_NAME}}.lnk\" \"$INSTDIR\\\\${{APP_EXE}}\"
+            CreateShortcut \"\$DESKTOP\\\\\${APP_NAME}.lnk\" \"\$INSTDIR\\\\\${APP_EXE}\"
             
             ; Write registry keys
-            WriteRegStr HKLM \"Software\\\\${{APP_NAME}}\" \"Install_Dir\" \"$INSTDIR\"
-            WriteRegStr HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\${{APP_NAME}}\" \"DisplayName\" \"${{APP_NAME}}\"
-            WriteRegStr HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\${{APP_NAME}}\" \"UninstallString\" '\"$INSTDIR\\\\uninstall.exe\"'
-            WriteRegStr HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\${{APP_NAME}}\" \"DisplayVersion\" \"${{APP_VERSION}}\"
-            WriteRegStr HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\${{APP_NAME}}\" \"Publisher\" \"${{APP_PUBLISHER}}\"
-            WriteRegStr HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\${{APP_NAME}}\" \"URLInfoAbout\" \"${{APP_URL}}\"
-            WriteRegDWORD HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\${{APP_NAME}}\" \"NoModify\" 1
-            WriteRegDWORD HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\${{APP_NAME}}\" \"NoRepair\" 1
+            WriteRegStr HKLM \"Software\\\\\${APP_NAME}\" \"Install_Dir\" \"\$INSTDIR\"
+            WriteRegStr HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\\${APP_NAME}\" \"DisplayName\" \"\${APP_NAME}\"
+            WriteRegStr HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\\${APP_NAME}\" \"UninstallString\" '\"\$INSTDIR\\\\uninstall.exe\"'
+            WriteRegStr HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\\${APP_NAME}\" \"DisplayVersion\" \"\${APP_VERSION}\"
+            WriteRegStr HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\\${APP_NAME}\" \"Publisher\" \"\${APP_PUBLISHER}\"
+            WriteRegStr HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\\${APP_NAME}\" \"URLInfoAbout\" \"\${APP_URL}\"
+            WriteRegDWORD HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\\${APP_NAME}\" \"NoModify\" 1
+            WriteRegDWORD HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\\${APP_NAME}\" \"NoRepair\" 1
             
             ; Create uninstaller
-            WriteUninstaller \"$INSTDIR\\\\uninstall.exe\"
+            WriteUninstaller \"\$INSTDIR\\\\uninstall.exe\"
           SectionEnd
 
           ; Uninstaller section
           Section \"Uninstall\"
             ; Remove files
-            Delete \"$INSTDIR\\\\${{APP_EXE}}\"
-            Delete \"$INSTDIR\\\\uninstall.exe\"
-            RMDir \"$INSTDIR\"
+            Delete \"\$INSTDIR\\\\\${APP_EXE}\"
+            Delete \"\$INSTDIR\\\\uninstall.exe\"
+            RMDir \"\$INSTDIR\"
             
             ; Remove shortcuts
-            Delete \"$SMPROGRAMS\\\\${{APP_NAME}}\\\\${{APP_NAME}}.lnk\"
-            Delete \"$SMPROGRAMS\\\\${{APP_NAME}}\\\\Uninstall.lnk\"
-            RMDir \"$SMPROGRAMS\\\\${{APP_NAME}}\"
-            Delete \"$DESKTOP\\\\${{APP_NAME}}.lnk\"
+            Delete \"\$SMPROGRAMS\\\\\${APP_NAME}\\\\\${APP_NAME}.lnk\"
+            Delete \"\$SMPROGRAMS\\\\\${APP_NAME}\\\\Uninstall.lnk\"
+            RMDir \"\$SMPROGRAMS\\\\\${APP_NAME}\"
+            Delete \"\$DESKTOP\\\\\${APP_NAME}.lnk\"
             
             ; Remove registry keys
-            DeleteRegKey HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\${{APP_NAME}}\"
-            DeleteRegKey HKLM \"Software\\\\${{APP_NAME}}\"
+            DeleteRegKey HKLM \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\\${APP_NAME}\"
+            DeleteRegKey HKLM \"Software\\\\\${APP_NAME}\"
           SectionEnd
           '''
           
@@ -636,14 +405,6 @@ jobs:
               f.write(nsis_content)
           print('NSIS installer script created successfully')
           "
-        shell: bash
-
-      # Download Visual C++ Redistributable for Windows 7 builds
-      - name: Download VC++ Redistributable (Windows 7 only)
-        if: matrix.build-type == 'win7-compatible'
-        run: |
-          # Download Visual C++ 2015-2019 Redistributable which supports Windows 7
-          curl -L -o vcredist_x64.exe "https://aka.ms/vs/16/release/vc_redist.x64.exe"
         shell: bash
 
       # Create a basic license file if it doesn't exist
@@ -694,13 +455,11 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SilverFlagOVERSEE-${{ matrix.os }}-${{ matrix.build-type }}
+          name: SilverFlagOVERSEE-${{ matrix.os }}
           path: |
             dist/SilverFlagOVERSEE.dmg
             dist/SilverFlagOVERSEE-Installer.exe
-            dist/SilverFlagOVERSEE-Win7-Installer.exe
             dist/SilverFlagOVERSEE.AppImage
             dist/SilverFlagOVERSEE-linux.tar.gz
             dist/SilverFlagOVERSEE
-            dist/SilverFlagOVERSEE-Win7.exe
             dist/SilverFlagOVERSEE.app
