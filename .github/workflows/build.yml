@@ -10,8 +10,14 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+        include:
+          - os: ubuntu-latest
+            runner: ubuntu-latest
+          - os: windows-latest
+            runner: DESKTOP-22SKH22
+          - os: macos-latest
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout code
@@ -30,13 +36,13 @@ jobs:
 
       # Windows-specific: Install NSIS for installer creation
       - name: Install NSIS (Windows only)
-        if: runner.os == 'Windows'
+        if: matrix.os == 'windows-latest'
         run: |
           choco install nsis -y
 
       # Linux-specific: Install AppImage tools
       - name: Install AppImage tools (Linux only)
-        if: runner.os == 'Linux'
+        if: matrix.os == 'ubuntu-latest'
         run: |
           # Install FUSE for AppImage support
           sudo apt-get update
@@ -61,7 +67,7 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
-          if [[ "$RUNNER_OS" == "macOS" ]]; then
+          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
             # macOS with icon
             if [ -f "assets/logo.png" ]; then
               # Convert PNG to ICNS for macOS
@@ -81,7 +87,7 @@ jobs:
             else
               pyinstaller --windowed src/main.py --name SilverFlagOVERSEE --distpath dist
             fi
-          elif [[ "$RUNNER_OS" == "Windows" ]]; then
+          elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
             # Windows with icon
             if [ -f "assets/logo.png" ]; then
               # Convert PNG to ICO for Windows using Python
@@ -112,7 +118,7 @@ jobs:
 
       # Create AppImage for Linux
       - name: Create AppImage (Linux only)
-        if: runner.os == 'Linux'
+        if: matrix.os == 'ubuntu-latest'
         run: |
           APP_NAME=SilverFlagOVERSEE
           APPDIR=dist/${APP_NAME}.AppDir
@@ -181,7 +187,7 @@ jobs:
 
       # Create AppleScript file separately to avoid escaping hell
       - name: Create AppleScript for DMG (macOS only)
-        if: runner.os == 'macOS'
+        if: matrix.os == 'macos-latest'
         run: |
           cat > dmg_setup.applescript << 'APPLESCRIPT_EOF'
           tell application "Finder"
@@ -209,7 +215,7 @@ jobs:
           APPLESCRIPT_EOF
 
       - name: Create DMG (macOS only)
-        if: runner.os == 'macOS'
+        if: matrix.os == 'macos-latest'
         run: |
           APP_NAME=SilverFlagOVERSEE
           APP_PATH=dist/${APP_NAME}.app
@@ -310,7 +316,7 @@ jobs:
 
       # Create NSIS installer script for Windows using Python
       - name: Create NSIS installer script (Windows only)
-        if: runner.os == 'Windows'
+        if: matrix.os == 'windows-latest'
         run: |
           python -c "
           nsis_content = '''!define APP_NAME \"SilverFlagOVERSEE\"
@@ -409,7 +415,7 @@ jobs:
 
       # Create a basic license file if it doesn't exist
       - name: Create LICENSE.txt for Windows installer
-        if: runner.os == 'Windows'
+        if: matrix.os == 'windows-latest'
         run: |
           python -c "
           import os
@@ -443,7 +449,7 @@ jobs:
 
       # Build Windows installer
       - name: Build Windows installer
-        if: runner.os == 'Windows'
+        if: matrix.os == 'windows-latest'
         run: |
           makensis installer.nsi
 
