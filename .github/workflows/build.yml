@@ -459,6 +459,7 @@ jobs:
           path: |
             dist/SilverFlagOVERSEE.dmg
             dist/SilverFlagOVERSEE-Installer.exe
+            dist/SilverFlagOVERSEE.exe
             dist/SilverFlagOVERSEE.AppImage
             dist/SilverFlagOVERSEE-linux.tar.gz
             dist/SilverFlagOVERSEE
