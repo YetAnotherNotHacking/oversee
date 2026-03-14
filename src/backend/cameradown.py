@@ -90,9 +90,9 @@ def capture_single_frame(camera_url, timeout=5):
             if not img_data:
                 return None
                 
-            img_array = np.asarray(bytearray(img_data), dtype=np.uint8)
+            img_array = np.frombuffer(img_data, dtype=np.uint8)
             frame = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-            
+
             if frame is not None and frame.size > 0:
                 # Resize for preview if too large
                 if frame.shape[0] > 480 or frame.shape[1] > 640:
@@ -194,8 +194,9 @@ def read_stream(input_id, frames, borders, lock):
                             consecutive_failures += 1
                             raise ValueError("Empty image data received")
                             
-                        img_array = np.asarray(bytearray(img_data), dtype=np.uint8)
+                        img_array = np.frombuffer(img_data, dtype=np.uint8)
                         frame = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+
 
                         if frame is not None and frame.size > 0:
                             if frame.shape[0] > 0 and frame.shape[1] > 0 and frame.shape[2] == 3:
