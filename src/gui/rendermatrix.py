@@ -249,8 +249,9 @@ class CameraManager:
                             if not img_data:
                                 raise ValueError("Empty image data received")
                             
-                            img_array = np.asarray(bytearray(img_data), dtype=np.uint8)
+                            img_array = np.frombuffer(img_data, dtype=np.uint8)
                             frame = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+
                     else:
                         # Handle other stream types
                         frame = capture_single_frame(full_url)
