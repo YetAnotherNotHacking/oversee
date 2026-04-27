@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/clearbackground.png" alt="Icarus Logo" width="25%"/>
+</p>
+
 # OVERSEE Worldwide Viewer
 
 A comprehensive GUI application for monitoring and managing IP cameras worldwide. The application provides multiple views including a map view, matrix view, and list view for efficient camera management.
