@@ -27,7 +27,7 @@ streamables_file = os.path.join(DATA_DIR, 'streamables.txt')
 db2_path = os.path.join(DATA_DIR, "db2.db")
 
 # Version
-overseeversion = "1.0.0"
+overseeversion = "0.3.0"
 
 # Database paths
 cameras_db = get_database_path('cameras.db')
