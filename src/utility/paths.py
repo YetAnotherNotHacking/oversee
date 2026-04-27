@@ -11,10 +11,16 @@ def get_app_data_dir():
     Creates the directory if it doesn't exist.
     """
     # Get the appropriate base directory for the platform
+
     if platform.system() == "Darwin":  # macOS
         base_dir = os.path.expanduser("~/Library/Application Support/Oversee")
     elif platform.system() == "Windows":
-        base_dir = os.path.join(os.environ.get('APPDATA', ''), 'Oversee')
+        # Use APPDATA if set, otherwise fallback to user's home directory
+        appdata = os.environ.get('APPDATA')
+        if appdata and os.path.isdir(appdata):
+            base_dir = os.path.join(appdata, 'Oversee')
+        else:
+            base_dir = os.path.join(os.path.expanduser('~'), 'Oversee')
     else:  # Linux and others
         base_dir = os.path.expanduser("~/.oversee")
 
