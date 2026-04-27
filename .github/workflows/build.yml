@@ -445,7 +445,9 @@ jobs:
       - name: Build Windows installer
         if: runner.os == 'Windows'
         run: |
+          $env:Path += ";C:\Program Files (x86)\NSIS"
           makensis installer.nsi
+        shell: pwsh
 
       - name: Set build timestamp
         run: |
