@@ -268,40 +268,6 @@
             background-color: #cc0000;
         }
         
-        .download-stats {
-            font-size: 11px;
-            opacity: 0.8;
-            text-align: center;
-            line-height: 1.2;
-        }
-        
-        .download-count {
-            font-weight: bold;
-        }
-        
-        .last-country {
-            font-style: italic;
-        }
-        
-        .stats-summary {
-            background-color: #2c2c2c;
-            padding: 15px;
-            border-radius: 5px;
-            margin: 20px 0;
-            text-align: center;
-        }
-        
-        .stats-summary h4 {
-            color: #ff0000;
-            margin: 0 0 10px 0;
-        }
-        
-        .total-downloads {
-            color: #ffffff;
-            font-size: 18px;
-            font-weight: bold;
-        }
-        
         .version-history {
             margin-top: 30px;
             background-color: #2c2c2c;
@@ -457,28 +423,27 @@
             
             <div class="download-buttons">
                 <div class="download-dropdown">
-                    <a href="#" class="download-button" onclick="return false;" data-platform="macos">
-                        <div class="platform-name">🍎 macOS (Arm)</div>
-                        <div class="download-stats loading-stats" id="stats-macos">Loading...</div>
+                    <a href="#" class="download-button">
+                        <div class="platform-name">macOS (Arm)</div>
                     </a>
                     <div class="download-dropdown-content">
-                        <a href="https://github.com/YetAnotherNotHacking/oversee/releases/download/v0.3.3/SilverFlagOVERSEE-macos-latest-arm64.zip" onclick="trackDownload('macos-arm')">Apple Silicon (Arm)</a>
+                        <a href="https://github.com/YetAnotherNotHacking/oversee/releases/download/v0.3.3/SilverFlagOVERSEE-macos-latest-arm64.zip">Apple Silicon (Arm)</a>
                     </div>
                 </div>
-                <a href="https://github.com/YetAnotherNotHacking/oversee/releases/download/v0.3.3/SilverFlagOVERSEE-windows-latest.zip" 
-                   class="download-button" 
-                   onclick="trackDownload('windows')"
-                   data-platform="windows">
-                    <div class="platform-name">🪟 Windows</div>
-                    <div class="download-stats loading-stats" id="stats-windows">Loading...</div>
-                </a>
                 <div class="download-dropdown">
-                    <a href="#" class="download-button" onclick="return false;" data-platform="linux">
-                        <div class="platform-name">🐧 Linux</div>
-                        <div class="download-stats loading-stats" id="stats-linux">Loading...</div>
+                    <a href="#" class="download-button">
+                        <div class="platform-name">Windows</div>
                     </a>
                     <div class="download-dropdown-content">
-                        <a href="https://github.com/YetAnotherNotHacking/oversee/releases/download/v0.3.3/SilverFlagOVERSEE-ubuntu-22.04-latest.zip" onclick="trackDownload('linux-2204')">Ubuntu 22.04</a>
+                        <a href="https://github.com/YetAnotherNotHacking/oversee/releases/download/v0.3.3/SilverFlagOVERSEE-windows-latest.zip">Windows</a>
+                    </div>
+                </div>
+                <div class="download-dropdown">
+                    <a href="#" class="download-button">
+                        <div class="platform-name">Linux</div>
+                    </a>
+                    <div class="download-dropdown-content">
+                        <a href="https://github.com/YetAnotherNotHacking/oversee/releases/download/v0.3.3/SilverFlagOVERSEE-ubuntu-22.04-latest.zip">Ubuntu 22.04</a>
                     </div>
                 </div>
             </div>
